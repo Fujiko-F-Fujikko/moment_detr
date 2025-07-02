@@ -1,8 +1,13 @@
 from PyQt6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
+from PyQt6.QtCore import pyqtSignal
 from TimelineViewer import TimelineViewer
 from DetectionInterval import DetectionInterval
 
 class MultiTimelineViewer(QWidget):  
+
+    # シグナルを定義  
+    intervalClicked = pyqtSignal(object, object)  # (interval, query_result)  
+
     def __init__(self):  
         super().__init__()  
         self.timeline_widgets = []  
@@ -68,6 +73,11 @@ class MultiTimelineViewer(QWidget):
           
         container_layout.addWidget(timeline)  
         container.setLayout(container_layout)  
+
+        # タイムラインのクリックイベントを接続  
+        timeline.intervalClicked.connect(  
+            lambda interval: self.on_interval_clicked(interval, query_result)  
+        )  
           
         return container
       
@@ -103,3 +113,8 @@ class MultiTimelineViewer(QWidget):
             if timeline:  
                 timeline.set_video_duration(duration)  
                 print(f"Applied duration {duration} to timeline")
+
+    def on_interval_clicked(self, interval, query_result):  
+        """区間がクリックされた時の処理"""  
+        # メインウィンドウに通知  
+        self.intervalClicked.emit(interval, query_result)

@@ -207,7 +207,10 @@ class MainApplicationWindow(QMainWindow):
           
         # クエリ選択（Detection Results内）  
         self.query_combo.currentTextChanged.connect(self.on_query_selected) 
-          
+
+        # 複数タイムラインからの区間クリックを接続  
+        self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)  
+
     def setup_menus(self):  
         """メニューバーの設定"""  
         menubar = self.menuBar()  
@@ -587,6 +590,32 @@ class MainApplicationWindow(QMainWindow):
         except Exception as e:  
             QMessageBox.critical(self, "Error", f"Failed to load JSON: {str(e)}")
 
+    def on_timeline_interval_clicked(self, interval, query_result):  
+        """タイムライン上の区間がクリックされた時の処理"""  
+        # 1. 該当するクエリをコンボボックスで選択  
+        query_text = query_result.get('query', '')  
+        index = self.query_combo.findText(query_text)  
+        if index >= 0:  
+            self.query_combo.setCurrentIndex(index)  
+          
+        # 2. 結果リストで該当する区間を選択  
+        self.select_interval_in_list(interval, query_result)  
+      
+    def select_interval_in_list(self, clicked_interval, query_result):  
+        """結果リストで指定された区間を選択"""  
+        pred_windows = query_result.get('pred_relevant_windows', [])  
+          
+        for i, window in enumerate(pred_windows):  
+            if len(window) >= 3:  
+                start, end, confidence = window[:3]  
+                # クリックされた区間と一致するかチェック  
+                if (abs(start - clicked_interval.start_time) < 0.1 and   
+                    abs(end - clicked_interval.end_time) < 0.1):  
+                    # リストアイテムを選択  
+                    self.results_list.setCurrentRow(i)  
+                    # 詳細情報を更新  
+                    self.on_result_selected(self.results_list.item(i))  
+                    break
 
 def parse_arguments():  
     """コマンドライン引数を解析"""  
