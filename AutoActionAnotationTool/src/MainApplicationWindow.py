@@ -203,14 +203,20 @@ class MainApplicationWindow(QMainWindow):
         
     def on_interval_updated(self):
         """区間が更新された時の処理"""
+        # ResultsManagerに変更を通知
+        self.results_manager.update_results_display()
         self.update_display()
         
     def on_interval_deleted(self):
         """区間が削除された時の処理"""
+        # ResultsManagerに変更を通知
+        self.results_manager.update_results_display()
         self.update_display()
         
     def on_interval_added(self):
         """区間が追加された時の処理"""
+        # ResultsManagerに変更を通知
+        self.results_manager.update_results_display()
         self.update_display()
         
     def on_results_saved(self, file_path: str):
