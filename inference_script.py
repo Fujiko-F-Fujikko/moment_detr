@@ -3,19 +3,19 @@ import json
 import os  
 from pathlib import Path  
 import torch
-
+  
 # moment_detrのパスを追加  
 sys.path.append('.')  
   
 from run_on_video.run import MomentDETRPredictor  
   
 def main():  
-    if len(sys.argv) != 3:  
-        print("Usage: python inference_script.py <video_path> <query_text>")  
+    if len(sys.argv) < 3:  
+        print("Usage: python inference_script.py <video_path> <query1> [query2] [query3] ...")  
         sys.exit(1)  
       
     video_path = sys.argv[1]  
-    query_text = sys.argv[2]  
+    query_list = sys.argv[2:]  # 2番目以降の引数をクエリリストとして取得  
       
     # ビデオファイルの存在確認  
     if not os.path.exists(video_path):  
@@ -36,13 +36,12 @@ def main():
         moment_detr_predictor = MomentDETRPredictor(  
             ckpt_path=ckpt_path,  
             clip_model_name_or_path="ViT-B/32",  
-            device='cuda' if torch.cuda.is_available() else 'cpu'
-        )  
+            device="cuda" if torch.cuda.is_available() else "cpu"
+        )
         print("Using device:", moment_detr_predictor.device)
           
-        # 推論実行  
-        print("Running inference...")  
-        query_list = [query_text]  
+        # 推論実行（複数クエリを一度に処理）  
+        print(f"Running inference for {len(query_list)} queries...")  
         predictions = moment_detr_predictor.localize_moment(  
             video_path=video_path,   
             query_list=query_list  
@@ -51,21 +50,29 @@ def main():
         # 結果を整形  
         result = {  
             "video_path": video_path,  
-            "query": query_text,  
-            "predictions": predictions[0] if predictions else {}  
+            "total_queries": len(query_list),  
+            "results": predictions  
         }  
           
         # JSON形式で出力  
         print("\n" + "="*50)  
-        print("INFERENCE RESULT (JSON):")  
+        print("INFERENCE RESULTS (JSON):")  
         print("="*50)  
         print(json.dumps(result, indent=2, ensure_ascii=False))  
           
         # 結果をファイルにも保存  
-        output_file = f"result_{Path(video_path).stem}.json"  
+        output_file = f"result_{Path(video_path).stem}_multi_query.json"  
         with open(output_file, 'w', encoding='utf-8') as f:  
             json.dump(result, f, indent=2, ensure_ascii=False)  
         print(f"\nResult saved to: {output_file}")  
+          
+        # 各クエリの結果を個別に表示  
+        print("\n" + "="*50)  
+        print("INDIVIDUAL QUERY RESULTS:")  
+        print("="*50)  
+        for i, pred in enumerate(predictions):  
+            print(f"\nQuery {i+1}: {pred['query']}")  
+            print(f"Top prediction: {pred['pred_relevant_windows'][0] if pred['pred_relevant_windows'] else 'No predictions'}")  
           
     except Exception as e:  
         print(f"Error during inference: {str(e)}")  
