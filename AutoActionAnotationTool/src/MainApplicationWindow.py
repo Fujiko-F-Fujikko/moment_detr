@@ -3,6 +3,7 @@ import os
 import json  
 from typing import List, Dict
 import argparse
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -18,6 +19,7 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 from MultiTimelineViewer import MultiTimelineViewer
 from DetectionInterval import DetectionInterval
 from ApplicationController import ApplicationController, FilterController
+from DataHandling import InferenceResultsLoader, InferenceResultsSaver
 
 
 
@@ -32,10 +34,15 @@ class MainApplicationWindow(QMainWindow):
         self.current_video_path = None  
         self.current_query_results = []  
         self.saliency_threshold = 0.0  
+        self.confidence_threshold = 0.0
 
         # コントローラーを初期化  
         self.app_controller = ApplicationController()  
         self.filter_controller = FilterController(self.app_controller)  
+
+        # 推論結果のロードとセーブ
+        self.inference_loader = InferenceResultsLoader()
+        self.inference_saver = InferenceResultsSaver()
           
         # UIコンポーネント  
         self.setup_ui()  
@@ -253,60 +260,35 @@ class MainApplicationWindow(QMainWindow):
         file_path, _ = QFileDialog.getOpenFileName(  
             self, "Open Video", "", "Video Files (*.mp4 *.avi *.mov *.mkv)"  
         )  
-        if file_path:  
-            self.current_video_path = file_path  
-            self.video_player.setSource(QUrl.fromLocalFile(file_path))
+        self.load_video_from_path(file_path)
               
     def load_inference_results(self):  
         """推論結果JSONファイルを読み込む"""  
         file_path, _ = QFileDialog.getOpenFileName(  
-            self, "Load Inference Results", "", "JSON Files (*.json *.jsonl)"  
+            self, "Load Inference Results", "", "JSON Files (*.json)"  
         )  
-        if file_path:  
-            try:  
-                self.inference_results = self.load_json_results(file_path)  
-                self.populate_query_combo()  
-                self.update_display()  
-                QMessageBox.information(self, "Success", "Results loaded successfully!")  
-            except Exception as e:  
-                QMessageBox.critical(self, "Error", f"Failed to load results: {str(e)}")  
-                  
-    def load_json_results(self, file_path: str) -> List[Dict]:  
-        """JSONファイルから推論結果を読み込む"""  
-        results = []  
-        with open(file_path, 'r', encoding='utf-8') as f:  
-            if file_path.endswith('.jsonl'):  
-                for line in f:  
-                    if line.strip():  
-                        results.append(json.loads(line))  
-            else:  
-                data = json.load(f)  
-                if isinstance(data, dict) and 'results' in data:  
-                    results = data['results']  
-                elif isinstance(data, list):  
-                    results = data  
-                else:  
-                    results = [data]  
-        return results  
-          
-    def populate_query_combo(self):  
-        """クエリコンボボックスを更新"""  
-        self.query_combo.clear()  
-        if self.inference_results:  
-            for result in self.inference_results:  
-                query_text = result.get('query', f"Query {result.get('qid', 'Unknown')}")  
-                self.query_combo.addItem(query_text)  
-                  
-    def on_query_selected(self, query_text: str):  
-        """クエリが選択された時の処理"""  
-        if not self.inference_results:  
-            return  
-              
-        # 選択されたクエリの結果を取得  
-        for result in self.inference_results:  
-            if result.get('query') == query_text:  
-                self.current_query_results = result  
-                self.update_results_display()  
+        self.load_inference_results_from_path(file_path)
+
+    def populate_query_combo(self):    
+        """クエリコンボボックスを更新"""    
+        self.query_combo.clear()    
+        if self.inference_results:    
+            for result in self.inference_results:    
+                # QueryResultsオブジェクトのプロパティにアクセス  
+                query_text = result.query_text if hasattr(result, 'query_text') else f"Query {getattr(result, 'query_id', 'Unknown')}"  
+                self.query_combo.addItem(query_text)    
+      
+    def on_query_selected(self, query_text: str):    
+        """クエリが選択された時の処理"""    
+        if not self.inference_results:    
+            return    
+                
+        # 選択されたクエリの結果を取得    
+        for result in self.inference_results:    
+            # QueryResultsオブジェクトのプロパティと比較  
+            if (hasattr(result, 'query_text') and result.query_text == query_text):  
+                self.current_query_results = result    
+                self.update_results_display()    
                 break
                   
     def parse_intervals(self, pred_windows: List) -> List[DetectionInterval]:  
@@ -324,12 +306,11 @@ class MainApplicationWindow(QMainWindow):
         if not self.current_query_results:  
             return  
               
-        pred_windows = self.current_query_results.get('pred_relevant_windows', [])  
-        for i, window in enumerate(pred_windows):  
-            if len(window) >= 3:  
-                start, end, confidence = window[:3]  
-                item_text = f"{i+1}: {start:.2f}s - {end:.2f}s (conf: {confidence:.4f})"  
-                self.results_list.addItem(item_text)  
+        # QueryResultsオブジェクトのrelevant_windowsを使用  
+        for i, interval in enumerate(self.current_query_results.relevant_windows):  
+            start, end, confidence = interval.start_time, interval.end_time, interval.confidence_score  
+            item_text = f"{i+1}: {start:.2f}s - {end:.2f}s (conf: {confidence:.4f})"  
+            self.results_list.addItem(item_text)  
                   
     def update_saliency_threshold(self, value: int):  
         """顕著性閾値を更新"""  
@@ -341,6 +322,7 @@ class MainApplicationWindow(QMainWindow):
     def update_confidence_filter(self, value: int):    
         """信頼度フィルタを更新"""    
         threshold = value / 100.0    
+        self.confidence_threshold = threshold
         self.confidence_value_label.setText(f"{threshold:.2f}")  # ラベルを更新  
         print(f"Confidence threshold changed to: {threshold}")  # デバッグ用    
         self.apply_filters()
@@ -356,24 +338,48 @@ class MainApplicationWindow(QMainWindow):
         filtered_results = []  
           
         for result in self.inference_results:  
-            # 信頼度フィルタリング  
-            pred_windows = result.get('pred_relevant_windows', [])  
-            filtered_windows = [  
-                window for window in pred_windows   
-                if len(window) >= 3 and window[2] >= confidence_threshold  
-            ]  
-              
-            # 顕著性スコアフィルタリング
-            saliency_scores = result.get('pred_saliency_scores', [])  
-            filtered_saliency = [  
-                score if score >= saliency_threshold else -1.0   
-                for score in saliency_scores  
-            ]  
-              
-            filtered_result = result.copy()  
-            filtered_result['pred_relevant_windows'] = filtered_windows  
-            filtered_result['pred_saliency_scores'] = filtered_saliency  
-            filtered_results.append(filtered_result)  
+            # QueryResultsオブジェクトの場合  
+            if hasattr(result, 'relevant_windows'):  
+                # 信頼度フィルタリング  
+                filtered_intervals = [  
+                    interval for interval in result.relevant_windows   
+                    if interval.confidence_score >= confidence_threshold  
+                ]  
+                  
+                # 顕著性スコアフィルタリング  
+                filtered_saliency = [  
+                    score if score >= saliency_threshold else -1.0   
+                    for score in result.saliency_scores  
+                ]  
+                  
+                # フィルタされた結果を作成（QueryResultsオブジェクトのコピー）  
+                from Results import QueryResults  
+                filtered_result = QueryResults(  
+                    query_text=result.query_text,  
+                    video_id=result.video_id,  
+                    relevant_windows=filtered_intervals,  
+                    saliency_scores=filtered_saliency,  
+                    query_id=result.query_id  
+                )  
+                filtered_results.append(filtered_result)  
+            else:  
+                # 辞書形式の場合（後方互換性）  
+                pred_windows = result.get('pred_relevant_windows', [])  
+                filtered_windows = [  
+                    window for window in pred_windows   
+                    if len(window) >= 3 and window[2] >= confidence_threshold  
+                ]  
+                  
+                saliency_scores = result.get('pred_saliency_scores', [])  
+                filtered_saliency = [  
+                    score if score >= saliency_threshold else -1.0   
+                    for score in saliency_scores  
+                ]  
+                  
+                filtered_result = result.copy()  
+                filtered_result['pred_relevant_windows'] = filtered_windows  
+                filtered_result['pred_saliency_scores'] = filtered_saliency  
+                filtered_results.append(filtered_result)  
           
         self.multi_timeline_viewer.set_query_results(filtered_results)
           
@@ -389,41 +395,62 @@ class MainApplicationWindow(QMainWindow):
         if file_path:  
             try:  
                 # 閾値以下の結果を除外して保存  
-                filtered_results = self.filter_results_by_threshold()  
-                  
-                if file_path.endswith('.jsonl'):  
-                    with open(file_path, 'w', encoding='utf-8') as f:  
-                        for result in filtered_results:  
-                            f.write(json.dumps(result, ensure_ascii=False) + '\n')  
-                else:  
-                    with open(file_path, 'w', encoding='utf-8') as f:  
-                        json.dump(filtered_results, f, indent=2, ensure_ascii=False)  
-                          
+                filtered_results = self.filter_results_by_confidence()  
+                self.inference_saver.save_to_json(filtered_results, file_path)
                 QMessageBox.information(self, "Success", f"Results saved to {file_path}")  
                   
             except Exception as e:  
                 QMessageBox.critical(self, "Error", f"Failed to save results: {str(e)}")  
       
-    def filter_results_by_threshold(self) -> List[Dict]:  
+    def filter_results_by_confidence(self):  
         """閾値以下の結果を除外"""  
         if not self.inference_results:  
-            return []  
+            from Results import InferenceResults  
+            return InferenceResults(results=[], timestamp=datetime.now(), model_info={})  
               
         filtered_results = []  
         for result in self.inference_results:  
-            # 信頼度閾値でフィルタリング  
-            pred_windows = result.get('pred_relevant_windows', [])  
-            filtered_windows = [  
-                window for window in pred_windows   
-                if len(window) >= 3 and window[2] >= self.saliency_threshold  
-            ]  
-              
-            # フィルタされた結果を作成  
-            filtered_result = result.copy()  
-            filtered_result['pred_relevant_windows'] = filtered_windows  
-            filtered_results.append(filtered_result)  
-              
-        return filtered_results  
+            # QueryResultsオブジェクトの場合  
+            if hasattr(result, 'relevant_windows'):  
+                # 信頼度閾値でフィルタリング  
+                filtered_intervals = [  
+                    interval for interval in result.relevant_windows   
+                    if interval.confidence_score >= self.confidence_threshold  
+                ]  
+                  
+                # フィルタされた結果を作成（QueryResultsオブジェクトのコピー）  
+                from Results import QueryResults  
+                filtered_result = QueryResults(  
+                    query_text=result.query_text,  
+                    video_id=result.video_id,  
+                    relevant_windows=filtered_intervals,  
+                    saliency_scores=result.saliency_scores,  
+                    query_id=result.query_id  
+                )  
+                filtered_results.append(filtered_result)  
+            else:  
+                # 辞書形式の場合（後方互換性）  
+                pred_windows = result.get('pred_relevant_windows', [])  
+                filtered_windows = [  
+                    window for window in pred_windows   
+                    if len(window) >= 3 and window[2] >= self.confidence_threshold  
+                ]  
+                  
+                # フィルタされた結果を作成  
+                filtered_result = result.copy()  
+                filtered_result['pred_relevant_windows'] = filtered_windows  
+                filtered_results.append(filtered_result)  
+        
+        # InferenceResultsオブジェクトを作成して返す
+        from Results import InferenceResults
+        from datetime import datetime
+        return InferenceResults(
+            results=filtered_results,
+            timestamp=datetime.now(),
+            model_info={"filtered": True},
+            video_path=getattr(self, 'current_video_path', None),
+            total_queries=len(filtered_results)
+        )  
       
     def toggle_playback(self):  
         """再生/一時停止の切り替え"""  
@@ -533,57 +560,63 @@ class MainApplicationWindow(QMainWindow):
               
         # 選択されたアイテムのインデックスを取得  
         row = self.results_list.row(item)  
-        pred_windows = self.current_query_results.get('pred_relevant_windows', [])  
+        relevant_windows = self.current_query_results.relevant_windows  
           
-        if 0 <= row < len(pred_windows):  
-            window = pred_windows[row]  
-            if len(window) >= 3:  
-                start, end, confidence = window[:3]  
+        if 0 <= row < len(relevant_windows):  
+            interval = relevant_windows[row]  
+            start, end, confidence = interval.start_time, interval.end_time, interval.confidence_score  
                   
-                # エディタに値を設定  
-                self.start_spinbox.setValue(start)  
-                self.end_spinbox.setValue(end)  
+            # エディタに値を設定  
+            self.start_spinbox.setValue(start)  
+            self.end_spinbox.setValue(end)  
                   
-                # 信頼度ラベルを更新  
-                self.confidence_label.setText(f"{confidence:.4f}")  
+            # 信頼度ラベルを更新  
+            self.confidence_label.setText(f"{confidence:.4f}")  
                   
-                # 選択された区間を記録  
-                self.selected_interval = row  
+            # 選択された区間を記録  
+            self.selected_interval = row  
                   
-                # 動画をその位置にシーク  
-                self.video_player.setPosition(int(start * 1000))
+            # 動画をその位置にシーク  
+            self.video_player.setPosition(int(start * 1000))
       
     def update_interval_in_results(self, interval_index: int, new_start: float, new_end: float):  
         """結果内の区間を更新"""  
         if not self.current_query_results:  
             return  
               
-        pred_windows = self.current_query_results.get('pred_relevant_windows', [])  
-        if 0 <= interval_index < len(pred_windows):  
-            window = pred_windows[interval_index]  
-            if len(window) >= 3:  
-                # 新しい値で更新（信頼度は保持）  
-                pred_windows[interval_index] = [new_start, new_end, window[2]]  
+        relevant_windows = self.current_query_results.relevant_windows  
+        if 0 <= interval_index < len(relevant_windows):  
+            interval = relevant_windows[interval_index]  
+            # DetectionIntervalオブジェクトの属性を更新  
+            interval.start_time = new_start  
+            interval.end_time = new_end  
+            # 信頼度は保持される  
       
     def remove_interval_from_results(self, interval_index: int):  
         """結果から区間を削除"""  
         if not self.current_query_results:  
             return  
               
-        pred_windows = self.current_query_results.get('pred_relevant_windows', [])  
-        if 0 <= interval_index < len(pred_windows):  
-            del pred_windows[interval_index]  
+        relevant_windows = self.current_query_results.relevant_windows  
+        if 0 <= interval_index < len(relevant_windows):  
+            del relevant_windows[interval_index]  
       
     def add_interval_to_results(self, new_interval: List[float]):  
         """結果に新しい区間を追加"""  
         if not self.current_query_results:  
             return  
               
-        pred_windows = self.current_query_results.get('pred_relevant_windows', [])  
-        pred_windows.append(new_interval)  
+        from DetectionInterval import DetectionInterval  
+        # 新しいDetectionIntervalオブジェクトを作成  
+        new_detection_interval = DetectionInterval(  
+            new_interval[0], new_interval[1], new_interval[2]  
+        )  
+        self.current_query_results.relevant_windows.append(new_detection_interval)  
           
         # 信頼度でソート  
-        pred_windows.sort(key=lambda x: x[2] if len(x) >= 3 else 0, reverse=True)  
+        self.current_query_results.relevant_windows.sort(  
+            key=lambda x: x.confidence_score, reverse=True  
+        )  
       
     def update_display(self):  
         """表示を更新"""  
@@ -610,35 +643,37 @@ class MainApplicationWindow(QMainWindow):
         except Exception as e:  
             QMessageBox.critical(self, "Error", f"Failed to load video: {str(e)}")  
       
-    def load_inference_results_from_path(self, json_path: str):  
-        """指定されたパスから推論結果を読み込む"""  
-        if not os.path.exists(json_path):  
-            QMessageBox.critical(self, "Error", f"JSON file not found: {json_path}")  
-            return  
-              
-        try:  
-            self.inference_results = self.load_json_results(json_path)  
-            self.populate_query_combo()  
-              
-            # 全てのクエリ結果を複数タイムラインビューアに設定  
-            self.multi_timeline_viewer.set_query_results(self.inference_results)  
-              
-            # 動画の長さが既に取得されている場合のみ設定  
-            if hasattr(self, 'video_player') and self.video_player.duration() > 0:  
-                duration_seconds = self.video_player.duration() / 1000.0  
-                self.multi_timeline_viewer.set_video_duration(duration_seconds)  
-                print(f"Applied video duration to timelines: {duration_seconds}")  
-            else:  
-                print("Video duration not available yet, will be set when duration is loaded")  
-              
-            print(f"Loaded inference results: {json_path}")  
-        except Exception as e:  
+    def load_inference_results_from_path(self, json_path: str):    
+        """指定されたパスから推論結果を読み込む"""    
+        if not os.path.exists(json_path):    
+            QMessageBox.critical(self, "Error", f"JSON file not found: {json_path}")    
+            return    
+                
+        try:    
+            inference_results_obj = self.inference_loader.load_from_json(json_path)  
+            # resultsリストを直接使用するように変更  
+            self.inference_results = inference_results_obj.results    
+            self.populate_query_combo()    
+                
+            # 全てのクエリ結果を複数タイムラインビューアに設定    
+            self.multi_timeline_viewer.set_query_results(self.inference_results)    
+                
+            # 動画の長さが既に取得されている場合のみ設定    
+            if hasattr(self, 'video_player') and self.video_player.duration() > 0:    
+                duration_seconds = self.video_player.duration() / 1000.0    
+                self.multi_timeline_viewer.set_video_duration(duration_seconds)    
+                    
+            print(f"Loaded inference results: {json_path}")    
+        except Exception as e:    
             QMessageBox.critical(self, "Error", f"Failed to load JSON: {str(e)}")
 
     def on_timeline_interval_clicked(self, interval, query_result):  
         """タイムライン上の区間がクリックされた時の処理"""  
         # 1. 該当するクエリをコンボボックスで選択  
-        query_text = query_result.get('query', '')  
+        if hasattr(query_result, 'query_text'):  
+            query_text = query_result.query_text  
+        else:  
+            query_text = query_result.get('query', '')  
         index = self.query_combo.findText(query_text)  
         if index >= 0:  
             self.query_combo.setCurrentIndex(index)  
@@ -648,19 +683,27 @@ class MainApplicationWindow(QMainWindow):
       
     def select_interval_in_list(self, clicked_interval, query_result):  
         """結果リストで指定された区間を選択"""  
-        pred_windows = query_result.get('pred_relevant_windows', [])  
+        # query_resultもQueryResultsオブジェクトの場合  
+        if hasattr(query_result, 'relevant_windows'):  
+            relevant_windows = query_result.relevant_windows  
+        else:  
+            # 辞書形式の場合（後方互換性）  
+            relevant_windows = []  
+            pred_windows = query_result.get('pred_relevant_windows', [])  
+            for window in pred_windows:  
+                if len(window) >= 3:  
+                    from DetectionInterval import DetectionInterval  
+                    relevant_windows.append(DetectionInterval(window[0], window[1], window[2]))  
           
-        for i, window in enumerate(pred_windows):  
-            if len(window) >= 3:  
-                start, end, confidence = window[:3]  
-                # クリックされた区間と一致するかチェック  
-                if (abs(start - clicked_interval.start_time) < 0.1 and   
-                    abs(end - clicked_interval.end_time) < 0.1):  
-                    # リストアイテムを選択  
-                    self.results_list.setCurrentRow(i)  
-                    # 詳細情報を更新  
-                    self.on_result_selected(self.results_list.item(i))  
-                    break
+        for i, interval in enumerate(relevant_windows):  
+            # クリックされた区間と一致するかチェック  
+            if (abs(interval.start_time - clicked_interval.start_time) < 0.1 and   
+                abs(interval.end_time - clicked_interval.end_time) < 0.1):  
+                # リストアイテムを選択  
+                self.results_list.setCurrentRow(i)  
+                # 詳細情報を更新  
+                self.on_result_selected(self.results_list.item(i))  
+                break
 
 def parse_arguments():  
     """コマンドライン引数を解析"""  

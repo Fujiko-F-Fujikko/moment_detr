@@ -39,46 +39,40 @@ class MultiTimelineViewer(QWidget):
         if self.video_duration > 0:  
             self.set_video_duration(self.video_duration)
       
-    def create_query_timeline(self, query_result):  
-        """単一クエリ用のタイムラインウィジェットを作成"""  
-        container = QWidget()  
-        container_layout = QVBoxLayout()  
-          
-        # クエリ名ラベル  
-        query_text = query_result.get('query', f"Query {query_result.get('qid', 'Unknown')}")  
-        query_label = QLabel(f"Query: {query_text}")  
-        query_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #f0f0f0;")  
-        container_layout.addWidget(query_label)  
-          
-        # タイムラインビューア  
-        timeline = TimelineViewer()  
-        timeline.setMinimumHeight(80)  
-        timeline.setMaximumHeight(120)  
-          
-        # 重要：新しく作成したタイムラインに動画の長さを設定  
-        if self.video_duration > 0:  
-            timeline.set_video_duration(self.video_duration)  
-            print(f"Set duration {self.video_duration} to new timeline")  
-          
-        # データを設定  
-        pred_windows = query_result.get('pred_relevant_windows', [])  
-        intervals = []  
-        for window in pred_windows:  
-            if len(window) >= 3:  
-                start_time, end_time, confidence = window[:3]  
-                intervals.append(DetectionInterval(start_time, end_time, confidence))  
-          
-        timeline.set_intervals(intervals)  
-        timeline.set_saliency_scores(query_result.get('pred_saliency_scores', []))  
-          
-        container_layout.addWidget(timeline)  
-        container.setLayout(container_layout)  
-
-        # タイムラインのクリックイベントを接続  
-        timeline.intervalClicked.connect(  
-            lambda interval: self.on_interval_clicked(interval, query_result)  
-        )  
-          
+    def create_query_timeline(self, query_result):    
+        """単一クエリ用のタイムラインウィジェットを作成"""    
+        container = QWidget()    
+        container_layout = QVBoxLayout()    
+            
+        # QueryResultsオブジェクトのプロパティにアクセス  
+        query_text = query_result.query_text if hasattr(query_result, 'query_text') else f"Query {getattr(query_result, 'query_id', 'Unknown')}"  
+        query_label = QLabel(f"Query: {query_text}")    
+        query_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #f0f0f0;")    
+        container_layout.addWidget(query_label)    
+            
+        # タイムラインビューア    
+        timeline = TimelineViewer()    
+        timeline.setMinimumHeight(80)    
+        timeline.setMaximumHeight(120)    
+            
+        # 重要：新しく作成したタイムラインに動画の長さを設定    
+        if self.video_duration > 0:    
+            timeline.set_video_duration(self.video_duration)    
+            print(f"Set duration {self.video_duration} to new timeline")    
+            
+        # QueryResultsオブジェクトのプロパティからデータを取得  
+        intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
+        timeline.set_intervals(intervals)    
+        timeline.set_saliency_scores(query_result.saliency_scores if hasattr(query_result, 'saliency_scores') else [])    
+            
+        container_layout.addWidget(timeline)    
+        container.setLayout(container_layout)    
+      
+        # タイムラインのクリックイベントを接続    
+        timeline.intervalClicked.connect(    
+            lambda interval: self.on_interval_clicked(interval, query_result)    
+        )    
+            
         return container
       
     def clear_timelines(self):  

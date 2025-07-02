@@ -6,51 +6,59 @@ from datetime import datetime
 from Results import QueryResults, InferenceResults
 
   
-class InferenceResultsLoader:  
-    def load_from_jsonl(self, file_path: Union[str, Path]) -> InferenceResults:  
-        """Load results from moment_detr JSONL format"""  
-        results = []  
-        with open(file_path, 'r') as f:  
-            for line in f:  
-                if line.strip():  
-                    data = json.loads(line)  
-                    results.append(QueryResults.from_moment_detr_json(data))  
+class InferenceResultsLoader:    
+    def load_from_json(self, file_path: Union[str, Path]) -> InferenceResults:    
+        """Load results from single JSON file"""    
+        with open(file_path, 'r') as f:    
+            data = json.load(f)    
+            
+        # 新しい形式の場合  
+        if 'results' in data and 'video_path' in data:  
+            results = []  
+            for i, item in enumerate(data['results']):  
+                query_result = QueryResults.from_moment_detr_json(item, i)  
+                results.append(query_result)  
+              
+            return InferenceResults(    
+                results=results,    
+                timestamp=datetime.now(),    
+                model_info={"source": str(file_path)},  
+                video_path=data.get('video_path'),  
+                total_queries=data.get('total_queries')  
+            )  
           
-        return InferenceResults(  
-            results=results,  
-            timestamp=datetime.now(),  
-            model_info={"source": str(file_path)}  
+        # 従来の形式の場合（後方互換性）  
+        if isinstance(data, list):    
+            results = [QueryResults.from_moment_detr_json(item, i) for i, item in enumerate(data)]    
+        else:    
+            results = [QueryResults.from_moment_detr_json(data, 0)]    
+            
+        return InferenceResults(    
+            results=results,    
+            timestamp=datetime.now(),    
+            model_info={"source": str(file_path)}    
         )  
-      
-    def load_from_json(self, file_path: Union[str, Path]) -> InferenceResults:  
-        """Load results from single JSON file"""  
-        with open(file_path, 'r') as f:  
-            data = json.load(f)  
-          
-        if isinstance(data, list):  
-            results = [QueryResults.from_moment_detr_json(item) for item in data]  
-        else:  
-            results = [QueryResults.from_moment_detr_json(data)]  
-          
-        return InferenceResults(  
-            results=results,  
-            timestamp=datetime.now(),  
-            model_info={"source": str(file_path)}  
-        )  
-  
-class InferenceResultsSaver:  
-    def save_to_jsonl(self, results: InferenceResults, file_path: Union[str, Path]):  
-        """Save in moment_detr JSONL format"""  
-        with open(file_path, 'w') as f:  
-            for result in results.results:  
-                json_data = {  
-                    'qid': result.query_id,  
-                    'query': result.query_text,  
-                    'vid': result.video_id,  
-                    'pred_relevant_windows': [  
-                        [interval.start_time, interval.end_time, interval.confidence_score]  
-                        for interval in result.relevant_windows  
-                    ],  
-                    'pred_saliency_scores': result.saliency_scores  
-                }  
-                f.write(json.dumps(json_data) + '\n')
+
+class InferenceResultsSaver:    
+    def save_to_json(self, results: InferenceResults, file_path: Union[str, Path]):    
+        """Save in new JSON format"""    
+        with open(file_path, 'w') as f:    
+            output_data = {  
+                "video_path": results.video_path or "",  
+                "total_queries": results.total_queries or len(results.results),  
+                "results": []  
+            }  
+              
+            for result in results.results:    
+                json_data = {    
+                    'query': result.query_text,    
+                    'vid': result.video_id,    
+                    'pred_relevant_windows': [    
+                        [interval.start_time, interval.end_time, interval.confidence_score]    
+                        for interval in result.relevant_windows    
+                    ],    
+                    'pred_saliency_scores': result.saliency_scores    
+                }    
+                output_data["results"].append(json_data)  
+              
+            json.dump(output_data, f, indent=2)

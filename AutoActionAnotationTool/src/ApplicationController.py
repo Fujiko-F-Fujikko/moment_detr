@@ -1,7 +1,8 @@
 from pathlib import Path
 from typing import List
-from PyQt6.QtCore import QObject, pyqtSignal
 import cv2
+
+from PyQt6.QtCore import QObject, pyqtSignal
 
 from VideoInfo import VideoInfo
 from DetectionInterval import DetectionInterval
