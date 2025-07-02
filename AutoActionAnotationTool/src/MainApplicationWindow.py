@@ -15,7 +15,7 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtMultimedia import QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 
-from TimelineViewer import TimelineViewer
+from MultiTimelineViewer import MultiTimelineViewer
 from DetectionInterval import DetectionInterval
 
 
@@ -70,7 +70,7 @@ class MainApplicationWindow(QMainWindow):
         self.video_player = QMediaPlayer()  
         self.video_widget = QVideoWidget()  
         self.video_player.setVideoOutput(self.video_widget)  
-        layout.addWidget(self.video_widget, stretch=3)  
+        layout.addWidget(self.video_widget, stretch=2)  
           
         # 動画コントロール  
         controls_layout = QHBoxLayout()  
@@ -84,9 +84,9 @@ class MainApplicationWindow(QMainWindow):
         controls_layout.addWidget(self.time_label)  
         layout.addLayout(controls_layout)  
           
-        # タイムラインビューア  
-        self.timeline_viewer = TimelineViewer()  
-        layout.addWidget(self.timeline_viewer, stretch=1)  
+        # 複数タイムラインビューア（単一のTimelineViewerを置き換え）  
+        self.multi_timeline_viewer = MultiTimelineViewer()  
+        layout.addWidget(self.multi_timeline_viewer, stretch=2)  
           
         # 顕著性閾値コントロール  
         threshold_layout = QHBoxLayout()  
@@ -100,7 +100,7 @@ class MainApplicationWindow(QMainWindow):
         layout.addLayout(threshold_layout)  
           
         left_widget.setLayout(layout)  
-        return left_widget  
+        return left_widget 
           
     def create_right_panel(self) -> QWidget:  
         """右パネル（コントロールと編集）の作成"""  
@@ -280,13 +280,7 @@ class MainApplicationWindow(QMainWindow):
             if result.get('query') == query_text:  
                 self.current_query_results = result  
                 self.update_results_display()  
-                self.timeline_viewer.set_intervals(  
-                    self.parse_intervals(result.get('pred_relevant_windows', []))  
-                )  
-                self.timeline_viewer.set_saliency_scores(  
-                    result.get('pred_saliency_scores', [])  
-                )  
-                break  
+                break
                   
     def parse_intervals(self, pred_windows: List) -> List[DetectionInterval]:  
         """pred_relevant_windowsをDetectionIntervalオブジェクトに変換"""  
@@ -389,20 +383,26 @@ class MainApplicationWindow(QMainWindow):
         self.position_slider.setValue(position)  
         self.update_time_label(position, self.video_player.duration())  
           
-        # タイムラインビューアの位置も更新  
-        if hasattr(self, 'timeline_viewer'):  
+        # 複数タイムラインビューアの位置も更新  
+        if hasattr(self, 'multi_timeline_viewer'):  
             current_time = position / 1000.0  # ミリ秒から秒に変換  
-            self.timeline_viewer.update_playhead_position(current_time)  
+            self.multi_timeline_viewer.update_playhead_position(current_time)
       
     def update_duration(self, duration: int):  
         """動画の長さが取得された時の処理"""  
         self.position_slider.setRange(0, duration)  
         self.update_time_label(self.video_player.position(), duration)  
           
-        # タイムラインビューアに動画の長さを設定  
-        if hasattr(self, 'timeline_viewer'):  
+        # 複数タイムラインビューアーに動画の長さを設定  
+        if hasattr(self, 'multi_timeline_viewer') and duration > 0:  
             duration_seconds = duration / 1000.0  
-            self.timeline_viewer.set_video_duration(duration_seconds)  
+            self.multi_timeline_viewer.set_video_duration(duration_seconds)  
+            print(f"Set video duration to timelines: {duration_seconds}")  
+              
+            # 既に推論結果が読み込まれている場合は、タイムラインを更新  
+            if hasattr(self, 'inference_results') and self.inference_results:  
+                self.multi_timeline_viewer.set_query_results(self.inference_results)
+
       
     def set_position(self, position: int):  
         """スライダーから再生位置を設定"""  
@@ -558,7 +558,18 @@ class MainApplicationWindow(QMainWindow):
         try:  
             self.inference_results = self.load_json_results(json_path)  
             self.populate_query_combo()  
-            self.update_display()  
+              
+            # 全てのクエリ結果を複数タイムラインビューアに設定  
+            self.multi_timeline_viewer.set_query_results(self.inference_results)  
+              
+            # 動画の長さが既に取得されている場合のみ設定  
+            if hasattr(self, 'video_player') and self.video_player.duration() > 0:  
+                duration_seconds = self.video_player.duration() / 1000.0  
+                self.multi_timeline_viewer.set_video_duration(duration_seconds)  
+                print(f"Applied video duration to timelines: {duration_seconds}")  
+            else:  
+                print("Video duration not available yet, will be set when duration is loaded")  
+              
             print(f"Loaded inference results: {json_path}")  
         except Exception as e:  
             QMessageBox.critical(self, "Error", f"Failed to load JSON: {str(e)}")
