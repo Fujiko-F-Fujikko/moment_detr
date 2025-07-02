@@ -108,10 +108,6 @@ class MainApplicationWindow(QMainWindow):
         right_widget.setMaximumWidth(350)  
         layout = QVBoxLayout()  
           
-        # クエリ選択  
-        layout.addWidget(QLabel("Select Query:"))  
-        self.query_combo = QComboBox()  
-        layout.addWidget(self.query_combo)  
           
         # フィルタ設定  
         filter_group = QGroupBox("Filters")  
@@ -126,8 +122,26 @@ class MainApplicationWindow(QMainWindow):
         filter_group.setLayout(filter_layout)  
         layout.addWidget(filter_group)  
           
-        # 区間編集  
-        edit_group = QGroupBox("Interval Editor")  
+        # Detection Results表示（メインコンテンツ）  
+        results_group = QGroupBox("Detection Results")  
+        results_layout = QVBoxLayout()  
+          
+        # クエリ選択（Detection Results内で使用）  
+        query_layout = QHBoxLayout()  
+        query_layout.addWidget(QLabel("Query:"))  
+        self.query_combo = QComboBox()  
+        query_layout.addWidget(self.query_combo)  
+        results_layout.addLayout(query_layout)  
+          
+        # 結果リスト  
+        self.results_list = QListWidget()  
+        results_layout.addWidget(self.results_list)  
+          
+        results_group.setLayout(results_layout)  
+        layout.addWidget(results_group, stretch=2)  # より多くのスペースを割り当て  
+          
+        # 区間編集（コンパクト化）  
+        edit_group = QGroupBox("Edit Selected")  
         edit_layout = QFormLayout()  
           
         self.start_spinbox = QDoubleSpinBox()  
@@ -140,20 +154,22 @@ class MainApplicationWindow(QMainWindow):
         self.end_spinbox.setDecimals(2)  
         self.end_spinbox.setSuffix(" s")  
           
-        self.confidence_spinbox = QDoubleSpinBox()  
-        self.confidence_spinbox.setRange(0, 1)  
-        self.confidence_spinbox.setDecimals(4)  
-        self.confidence_spinbox.setReadOnly(True)  
+        edit_layout.addRow("Start:", self.start_spinbox)  
+        edit_layout.addRow("End:", self.end_spinbox)  
+
+        # 信頼度表示ラベル
+        self.confidence_label = QLabel("0.0000")  
+        edit_layout.addRow("Confidence:", self.confidence_label)  
           
-        edit_layout.addRow("Start Time:", self.start_spinbox)  
-        edit_layout.addRow("End Time:", self.end_spinbox)  
-        edit_layout.addRow("Confidence:", self.confidence_spinbox)  
-          
-        # 編集ボタン  
+        # 編集ボタン（水平レイアウト）  
         button_layout = QHBoxLayout()  
         self.apply_button = QPushButton("Apply")  
         self.delete_button = QPushButton("Delete")  
-        self.add_button = QPushButton("Add New")  
+        self.add_button = QPushButton("Add")  
+          
+        # ボタンサイズを小さく  
+        for btn in [self.apply_button, self.delete_button, self.add_button]:  
+            btn.setMaximumHeight(30)  
           
         button_layout.addWidget(self.apply_button)  
         button_layout.addWidget(self.delete_button)  
@@ -163,19 +179,8 @@ class MainApplicationWindow(QMainWindow):
         edit_group.setLayout(edit_layout)  
         layout.addWidget(edit_group)  
           
-        # 結果表示  
-        results_group = QGroupBox("Detection Results")  
-        results_layout = QVBoxLayout()  
-          
-        self.results_list = QListWidget()  
-        results_layout.addWidget(self.results_list)  
-          
-        results_group.setLayout(results_layout)  
-        layout.addWidget(results_group)  
-          
-        layout.addStretch()  
         right_widget.setLayout(layout)  
-        return right_widget  
+        return right_widget
           
     def setup_connections(self):  
         """シグナル・スロット接続の設定"""  
@@ -199,6 +204,9 @@ class MainApplicationWindow(QMainWindow):
           
         # 結果リスト  
         self.results_list.itemClicked.connect(self.on_result_selected)  
+          
+        # クエリ選択（Detection Results内）  
+        self.query_combo.currentTextChanged.connect(self.on_query_selected) 
           
     def setup_menus(self):  
         """メニューバーの設定"""  
@@ -465,7 +473,7 @@ class MainApplicationWindow(QMainWindow):
             return  
               
         # 新しい区間を追加  
-        new_interval = [start_time, end_time, 0.5]  # デフォルト信頼度  
+        new_interval = [start_time, end_time, 1.0]  # デフォルト信頼度  
         self.add_interval_to_results(new_interval)  
         self.update_results_display()  
         self.update_display()  
@@ -487,13 +495,15 @@ class MainApplicationWindow(QMainWindow):
                 # エディタに値を設定  
                 self.start_spinbox.setValue(start)  
                 self.end_spinbox.setValue(end)  
-                self.confidence_spinbox.setValue(confidence)  
+                  
+                # 信頼度ラベルを更新  
+                self.confidence_label.setText(f"{confidence:.4f}")  
                   
                 # 選択された区間を記録  
                 self.selected_interval = row  
                   
                 # 動画をその位置にシーク  
-                self.video_player.setPosition(int(start * 1000))  
+                self.video_player.setPosition(int(start * 1000))
       
     def update_interval_in_results(self, interval_index: int, new_start: float, new_end: float):  
         """結果内の区間を更新"""  
@@ -530,11 +540,14 @@ class MainApplicationWindow(QMainWindow):
     def update_display(self):  
         """表示を更新"""  
         # タイムラインビューアを更新  
-        if hasattr(self, 'timeline_viewer') and self.current_query_results:  
-            intervals = self.parse_intervals(  
-                self.current_query_results.get('pred_relevant_windows', [])  
-            )  
-            self.timeline_viewer.set_intervals(intervals)  
+        if hasattr(self, 'multi_timeline_viewer') and self.inference_results:  
+            # 全ての推論結果を再設定してタイムラインを更新  
+            self.multi_timeline_viewer.set_query_results(self.inference_results)  
+              
+            # 動画の長さも再設定  
+            if hasattr(self, 'video_player') and self.video_player.duration() > 0:  
+                duration_seconds = self.video_player.duration() / 1000.0  
+                self.multi_timeline_viewer.set_video_duration(duration_seconds)
 
     def load_video_from_path(self, video_path: str):  
         """指定されたパスから動画を読み込む"""  
@@ -573,6 +586,7 @@ class MainApplicationWindow(QMainWindow):
             print(f"Loaded inference results: {json_path}")  
         except Exception as e:  
             QMessageBox.critical(self, "Error", f"Failed to load JSON: {str(e)}")
+
 
 def parse_arguments():  
     """コマンドライン引数を解析"""  
