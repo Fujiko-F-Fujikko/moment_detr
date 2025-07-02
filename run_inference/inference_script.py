@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
   
 # moment_detrのパスを追加  
-sys.path.append('.')  
+sys.path.append('../')  
   
 from run_on_video.run import MomentDETRPredictor  
   
@@ -23,7 +23,7 @@ def main():
         sys.exit(1)  
       
     # モデルチェックポイントのパス  
-    ckpt_path = "run_on_video/moment_detr_ckpt/model_best.ckpt"  
+    ckpt_path = "../run_on_video/moment_detr_ckpt/model_best.ckpt"  
       
     if not os.path.exists(ckpt_path):  
         print(f"Error: Model checkpoint '{ckpt_path}' not found.")  
@@ -61,7 +61,10 @@ def main():
         print(json.dumps(result, indent=2, ensure_ascii=False))  
           
         # 結果をファイルにも保存  
-        output_file = f"result_{Path(video_path).stem}_multi_query.json"  
+        output_dir = "inference_results"
+        if( not os.path.exists(output_dir)):
+            os.makedirs(output_dir)
+        output_file = os.path.join(output_dir, f"result_{Path(video_path).stem}_multi_query.json")
         with open(output_file, 'w', encoding='utf-8') as f:  
             json.dump(result, f, indent=2, ensure_ascii=False)  
         print(f"\nResult saved to: {output_file}")  
