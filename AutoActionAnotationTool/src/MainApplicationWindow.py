@@ -17,6 +17,7 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 
 from MultiTimelineViewer import MultiTimelineViewer
 from DetectionInterval import DetectionInterval
+from ApplicationController import ApplicationController, FilterController
 
 
 
@@ -31,6 +32,10 @@ class MainApplicationWindow(QMainWindow):
         self.current_video_path = None  
         self.current_query_results = []  
         self.saliency_threshold = 0.0  
+
+        # コントローラーを初期化  
+        self.app_controller = ApplicationController()  
+        self.filter_controller = FilterController(self.app_controller)  
           
         # UIコンポーネント  
         self.setup_ui()  
@@ -88,17 +93,6 @@ class MainApplicationWindow(QMainWindow):
         self.multi_timeline_viewer = MultiTimelineViewer()  
         layout.addWidget(self.multi_timeline_viewer, stretch=2)  
           
-        # 顕著性閾値コントロール  
-        threshold_layout = QHBoxLayout()  
-        threshold_layout.addWidget(QLabel("Saliency Threshold:"))  
-        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)  
-        self.threshold_slider.setRange(-100, 100)  
-        self.threshold_slider.setValue(0)  
-        self.threshold_value_label = QLabel("0.00")  
-        threshold_layout.addWidget(self.threshold_slider)  
-        threshold_layout.addWidget(self.threshold_value_label)  
-        layout.addLayout(threshold_layout)  
-          
         left_widget.setLayout(layout)  
         return left_widget 
           
@@ -108,20 +102,34 @@ class MainApplicationWindow(QMainWindow):
         right_widget.setMaximumWidth(350)  
         layout = QVBoxLayout()  
           
+        # フィルタ設定    
+        filter_group = QGroupBox("Filters")    
+        filter_layout = QVBoxLayout()    
           
-        # フィルタ設定  
-        filter_group = QGroupBox("Filters")  
-        filter_layout = QVBoxLayout()  
-          
-        filter_layout.addWidget(QLabel("Confidence Threshold:"))  
-        self.confidence_slider = QSlider(Qt.Orientation.Horizontal)  
-        self.confidence_slider.setRange(0, 100)  
-        self.confidence_slider.setValue(10)  
-        filter_layout.addWidget(self.confidence_slider)  
-          
-        filter_group.setLayout(filter_layout)  
-        layout.addWidget(filter_group)  
-          
+        # 信頼度閾値のレイアウト  
+        confidence_layout = QHBoxLayout()  
+        confidence_layout.addWidget(QLabel("Confidence Threshold:"))    
+        self.confidence_slider = QSlider(Qt.Orientation.Horizontal)    
+        self.confidence_slider.setRange(0, 100)    
+        self.confidence_slider.setValue(10)    
+        self.confidence_value_label = QLabel("0.10")
+        confidence_layout.addWidget(self.confidence_slider)  
+        confidence_layout.addWidget(self.confidence_value_label)  
+
+        # 顕著性閾値のレイアウト
+        saliency_layout = QHBoxLayout()  
+        saliency_layout.addWidget(QLabel("Saliency Threshold:"))    
+        self.threshold_slider = QSlider(Qt.Orientation.Horizontal)    
+        self.threshold_slider.setRange(-100, 100)    
+        self.threshold_slider.setValue(0)    
+        self.threshold_value_label = QLabel("0.00")    
+        saliency_layout.addWidget(self.threshold_slider)  
+        saliency_layout.addWidget(self.threshold_value_label)  
+
+        filter_layout.addLayout(saliency_layout)
+        filter_layout.addLayout(confidence_layout)  
+        filter_group.setLayout(filter_layout)    
+        layout.addWidget(filter_group)
 
         # 区間編集（コンパクト化）  
         edit_group = QGroupBox("Edit Selected")  
@@ -194,6 +202,13 @@ class MainApplicationWindow(QMainWindow):
         # 閾値スライダー  
         self.threshold_slider.valueChanged.connect(self.update_saliency_threshold)  
         self.confidence_slider.valueChanged.connect(self.update_confidence_filter)  
+        # フィルタ接続  
+        self.threshold_slider.valueChanged.connect(  
+            lambda v: self.filter_controller.set_saliency_threshold(v / 100.0)  
+        )
+        self.confidence_slider.valueChanged.connect(  
+            lambda v: self.filter_controller.set_confidence_threshold(v / 100.0)  
+          )
           
         # クエリ選択  
         self.query_combo.currentTextChanged.connect(self.on_query_selected)  
@@ -323,15 +338,44 @@ class MainApplicationWindow(QMainWindow):
         self.threshold_value_label.setText(f"{threshold:.2f}")  
         self.apply_filters()  
           
-    def update_confidence_filter(self, value: int):  
-        """信頼度フィルタを更新"""  
-        threshold = value / 100.0  
-        self.apply_filters()  
-          
+    def update_confidence_filter(self, value: int):    
+        """信頼度フィルタを更新"""    
+        threshold = value / 100.0    
+        self.confidence_value_label.setText(f"{threshold:.2f}")  # ラベルを更新  
+        print(f"Confidence threshold changed to: {threshold}")  # デバッグ用    
+        self.apply_filters()
+
     def apply_filters(self):  
         """フィルタを適用して表示を更新"""  
-        # フィルタリングロジックを実装  
-        self.update_display()  
+        if not self.inference_results:  
+            return  
+          
+        confidence_threshold = self.confidence_slider.value() / 100.0  
+        saliency_threshold = self.threshold_slider.value() / 100.0  
+          
+        filtered_results = []  
+          
+        for result in self.inference_results:  
+            # 信頼度フィルタリング  
+            pred_windows = result.get('pred_relevant_windows', [])  
+            filtered_windows = [  
+                window for window in pred_windows   
+                if len(window) >= 3 and window[2] >= confidence_threshold  
+            ]  
+              
+            # 顕著性スコアフィルタリング
+            saliency_scores = result.get('pred_saliency_scores', [])  
+            filtered_saliency = [  
+                score if score >= saliency_threshold else -1.0   
+                for score in saliency_scores  
+            ]  
+              
+            filtered_result = result.copy()  
+            filtered_result['pred_relevant_windows'] = filtered_windows  
+            filtered_result['pred_saliency_scores'] = filtered_saliency  
+            filtered_results.append(filtered_result)  
+          
+        self.multi_timeline_viewer.set_query_results(filtered_results)
           
     def save_results(self):  
         """編集された結果を保存"""  

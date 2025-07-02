@@ -5,7 +5,8 @@ import cv2
 
 from VideoInfo import VideoInfo
 from DetectionInterval import DetectionInterval
-from Results import QueryResults, InferenceResultsLoader, InferenceResultsSaver
+from Results import QueryResults
+from DataHandling import InferenceResultsLoader, InferenceResultsSaver
 from SaliencyFilter import SaliencyFilter
 
 class ApplicationController(QObject):  
