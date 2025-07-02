@@ -1,6 +1,8 @@
 import sys  
+import os
 import json  
 from typing import List, Dict
+import argparse
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
@@ -533,10 +535,55 @@ class MainApplicationWindow(QMainWindow):
                 self.current_query_results.get('pred_relevant_windows', [])  
             )  
             self.timeline_viewer.set_intervals(intervals)  
+
+    def load_video_from_path(self, video_path: str):  
+        """指定されたパスから動画を読み込む"""  
+        if not os.path.exists(video_path):  
+            QMessageBox.critical(self, "Error", f"Video file not found: {video_path}")  
+            return  
+              
+        try:  
+            self.current_video_path = video_path  
+            self.video_player.setSource(QUrl.fromLocalFile(video_path))  
+            print(f"Loaded video: {video_path}")  
+        except Exception as e:  
+            QMessageBox.critical(self, "Error", f"Failed to load video: {str(e)}")  
+      
+    def load_inference_results_from_path(self, json_path: str):  
+        """指定されたパスから推論結果を読み込む"""  
+        if not os.path.exists(json_path):  
+            QMessageBox.critical(self, "Error", f"JSON file not found: {json_path}")  
+            return  
+              
+        try:  
+            self.inference_results = self.load_json_results(json_path)  
+            self.populate_query_combo()  
+            self.update_display()  
+            print(f"Loaded inference results: {json_path}")  
+        except Exception as e:  
+            QMessageBox.critical(self, "Error", f"Failed to load JSON: {str(e)}")
+
+def parse_arguments():  
+    """コマンドライン引数を解析"""  
+    parser = argparse.ArgumentParser(description='Moment-DETR Video Annotation Viewer')  
+    parser.add_argument('--video', type=str, help='Path to video file')  
+    parser.add_argument('--json', type=str, help='Path to inference results JSON file')  
+    return parser.parse_args()  
   
-# メイン実行部分  
 if __name__ == '__main__':  
     app = QApplication(sys.argv)  
+      
+    # コマンドライン引数を解析  
+    args = parse_arguments()  
+      
     window = MainApplicationWindow()  
+      
+    # 引数が指定されている場合は自動的に読み込み  
+    if args.video:  
+        window.load_video_from_path(args.video)  
+      
+    if args.json:  
+        window.load_inference_results_from_path(args.json)  
+      
     window.show()  
     sys.exit(app.exec())
