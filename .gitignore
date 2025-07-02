@@ -46,3 +46,8 @@ credentials
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+venv/
+*.json
+*.jsonl
+*.mp4
