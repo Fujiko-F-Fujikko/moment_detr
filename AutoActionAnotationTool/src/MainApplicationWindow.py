@@ -122,24 +122,7 @@ class MainApplicationWindow(QMainWindow):
         filter_group.setLayout(filter_layout)  
         layout.addWidget(filter_group)  
           
-        # Detection Results表示（メインコンテンツ）  
-        results_group = QGroupBox("Detection Results")  
-        results_layout = QVBoxLayout()  
-          
-        # クエリ選択（Detection Results内で使用）  
-        query_layout = QHBoxLayout()  
-        query_layout.addWidget(QLabel("Query:"))  
-        self.query_combo = QComboBox()  
-        query_layout.addWidget(self.query_combo)  
-        results_layout.addLayout(query_layout)  
-          
-        # 結果リスト  
-        self.results_list = QListWidget()  
-        results_layout.addWidget(self.results_list)  
-          
-        results_group.setLayout(results_layout)  
-        layout.addWidget(results_group, stretch=2)  # より多くのスペースを割り当て  
-          
+
         # 区間編集（コンパクト化）  
         edit_group = QGroupBox("Edit Selected")  
         edit_layout = QFormLayout()  
@@ -178,6 +161,24 @@ class MainApplicationWindow(QMainWindow):
         edit_layout.addRow(button_layout)  
         edit_group.setLayout(edit_layout)  
         layout.addWidget(edit_group)  
+
+        # Detection Results表示（メインコンテンツ）  
+        results_group = QGroupBox("Detection Results")  
+        results_layout = QVBoxLayout()  
+          
+        # クエリ選択（Detection Results内で使用）  
+        query_layout = QHBoxLayout()  
+        query_layout.addWidget(QLabel("Query:"))  
+        self.query_combo = QComboBox()  
+        query_layout.addWidget(self.query_combo)  
+        results_layout.addLayout(query_layout)  
+          
+        # 結果リスト  
+        self.results_list = QListWidget()  
+        results_layout.addWidget(self.results_list)  
+          
+        results_group.setLayout(results_layout)  
+        layout.addWidget(results_group, stretch=2)  # より多くのスペースを割り当て  
           
         right_widget.setLayout(layout)  
         return right_widget
