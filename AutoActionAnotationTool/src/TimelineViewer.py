@@ -17,6 +17,7 @@ class TimelineViewer(QWidget):
         self.intervals = []  
         self.saliency_scores = []  
         self.setMinimumHeight(100)  
+        self.time_scale_enabled = False
           
     def set_video_duration(self, duration: float):  
         self.video_duration = duration  
@@ -34,23 +35,27 @@ class TimelineViewer(QWidget):
     def paintEvent(self, event):  
         if self.video_duration <= 0:  
             return  
-              
+            
         painter = QPainter(self)  
         rect = self.rect()  
-          
+        
         # Draw timeline background  
         painter.fillRect(rect, QColor(240, 240, 240))  
-          
-        # Draw saliency heatmap  
-        if self.saliency_scores:  
+        
+        # Draw time scale if enabled  
+        if self.time_scale_enabled:  
+            self.draw_time_scale(painter, rect.width(), rect.height())  
+        
+        # Draw saliency heatmap (if not using time scale)  
+        elif self.saliency_scores:  
             self.draw_saliency_heatmap(painter, rect)  
-          
+        
         # Draw intervals  
         for interval in self.intervals:  
             self.draw_interval(painter, rect, interval)  
-          
+        
         # Draw current position  
-        self.draw_current_position(painter, rect)  
+        self.draw_current_position(painter, rect)
       
     def draw_saliency_heatmap(self, painter: QPainter, rect: QRect):  
         """Draw saliency scores as heatmap background"""  
@@ -110,4 +115,46 @@ class TimelineViewer(QWidget):
     def update_playhead_position(self, position: float):  
         """再生ヘッドの位置を更新"""  
         self.current_position = position  
+        self.update()  # 再描画をトリガー
+
+    def draw_time_scale(self, painter, widget_width, widget_height):  
+        """動画の長さに基づいて時間目盛りを描画"""  
+        if self.video_duration <= 0:  
+            return  
+        
+        # 適切な目盛り間隔を計算  
+        scale_interval = self.calculate_scale_interval(self.video_duration)  
+        
+        # 目盛りの描画  
+        pen = QPen(QColor(200, 200, 200))  
+        painter.setPen(pen)  
+        
+        current_time = 0  
+        while current_time <= self.video_duration:  
+            x_pos = int((current_time / self.video_duration) * widget_width)  
+            
+            # 縦線を描画  
+            painter.drawLine(x_pos, 0, x_pos, widget_height)  
+            
+            # 時間ラベルを描画  
+            painter.drawText(x_pos + 2, 15, f"{current_time:.1f}s")  
+            
+            current_time += scale_interval  
+    
+    def calculate_scale_interval(self, duration):  
+        """動画の長さに基づいて適切な目盛り間隔を計算"""  
+        if duration <= 10:  
+            return 1.0  # 1秒間隔  
+        elif duration <= 60:  
+            return 5.0  # 5秒間隔  
+        elif duration <= 300:  
+            return 10.0  # 10秒間隔  
+        elif duration <= 600:  
+            return 30.0  # 30秒間隔  
+        else:  
+            return 60.0  # 1分間隔
+
+    def enable_time_scale(self, enabled: bool):  
+        """時間目盛り表示を有効/無効にする"""  
+        self.time_scale_enabled = enabled  
         self.update()  # 再描画をトリガー

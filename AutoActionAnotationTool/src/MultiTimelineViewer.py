@@ -85,12 +85,13 @@ class MultiTimelineViewer(QWidget):
         """動画の長さを設定し、既存の全タイムラインに適用"""  
         self.video_duration = duration  
         print(f"MultiTimelineViewer: Setting video duration to {duration}")  
-          
+        
         for widget in self.timeline_widgets:  
             timeline = widget.findChild(TimelineViewer)  
             if timeline:  
                 timeline.set_video_duration(duration)  
-                print(f"Applied duration {duration} to timeline")
+                timeline.enable_time_scale(True)  # 目盛り表示を有効化  
+                print(f"Applied duration {duration} to timeline with time scale")
 
     def on_interval_clicked(self, interval, query_result):  
         """区間がクリックされた時の処理"""  
@@ -112,9 +113,10 @@ class MultiTimelineViewer(QWidget):
         timeline.setMinimumHeight(100)  
         timeline.setMaximumHeight(150)  
         
-        # 重要：新しく作成したタイムラインに動画の長さを設定  
+        # 動画の長さを設定し、目盛り表示を有効化  
         if self.video_duration > 0:  
             timeline.set_video_duration(self.video_duration)  
+            timeline.enable_time_scale(True)  
         
         # 全ての区間を統合（クエリ情報は既に埋め込まれている）  
         all_intervals = []  
