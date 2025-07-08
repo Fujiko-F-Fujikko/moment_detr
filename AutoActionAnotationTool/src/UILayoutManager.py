@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QSlider, QComboBox, QGroupBox, QSplitter, 
-    QPushButton, QDoubleSpinBox, QFormLayout, QListWidget
+    QPushButton, QDoubleSpinBox, QFormLayout, QListWidget, QSizePolicy
 )
 from PyQt6.QtCore import Qt
 
@@ -12,36 +12,50 @@ class UILayoutManager:
     def __init__(self):
         self.ui_components = {}
         
-    def create_main_layout(self, left_panel: QWidget, right_panel: QWidget) -> QHBoxLayout:
-        """メインレイアウトを作成"""
-        main_layout = QHBoxLayout()
+    def create_main_layout(self, left_panel, right_panel, stt_panel=None):  
+        splitter = QSplitter(Qt.Orientation.Horizontal)  
+        splitter.addWidget(left_panel)  
+        splitter.addWidget(right_panel)  
         
-        # スプリッター
-        splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.addWidget(left_panel)
-        splitter.addWidget(right_panel)
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 1)
+        if stt_panel:  
+            splitter.addWidget(stt_panel)  
+            # 3パネルの初期サイズ比率（左:右:STT = 5:3:4）  
+            splitter.setSizes([500, 300, 400])  
+        else:  
+            splitter.setSizes([700, 300])  
         
-        main_layout.addWidget(splitter)
-        return main_layout
+        # 各パネルの最小幅を設定  
+        left_panel.setMinimumWidth(350)  
+        right_panel.setMinimumWidth(250)  
+        if stt_panel:  
+            stt_panel.setMinimumWidth(300)  
         
-    def create_left_panel(self, video_widget, controls_layout, multi_timeline_viewer) -> QWidget:
-        """左パネル（動画プレイヤーとタイムライン）を作成"""
-        left_widget = QWidget()
-        layout = QVBoxLayout()
+        splitter.setChildrenCollapsible(False)  
+        return splitter
+
+    def create_left_panel(self, video_widget, controls_layout, multi_timeline_viewer):  
+        # 垂直スプリッターを使用（前回の会話で提案された方法）  
+        vertical_splitter = QSplitter(Qt.Orientation.Vertical)  
         
-        # 動画プレイヤー
-        layout.addWidget(video_widget, stretch=2)
+        # 上部：動画プレイヤーとコントロール  
+        video_container = QWidget()  
+        video_layout = QVBoxLayout()  
+        video_layout.addWidget(video_widget)  
         
-        # 動画コントロール
-        layout.addLayout(controls_layout)
+        # コントロールレイアウトをウィジェットに包んで幅制御  
+        controls_widget = QWidget()  
+        controls_widget.setLayout(controls_layout)  
+        controls_widget.setMaximumHeight(40)  # 高さ制限  
+        controls_widget.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)  
         
-        # 複数タイムラインビューア
-        layout.addWidget(multi_timeline_viewer, stretch=2)
+        video_layout.addWidget(controls_widget)  
+        video_container.setLayout(video_layout)  
         
-        left_widget.setLayout(layout)
-        return left_widget
+        # スプリッターに追加  
+        vertical_splitter.addWidget(video_container)  
+        vertical_splitter.addWidget(multi_timeline_viewer)  
+        
+        return vertical_splitter
         
     def create_right_panel(self) -> tuple[QWidget, dict]:
         """右パネル（コントロールと編集）を作成"""
