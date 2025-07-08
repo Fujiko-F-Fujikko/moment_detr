@@ -26,54 +26,38 @@ class MultiTimelineViewer(QWidget):
         self.video_duration = 0.0
         
     def set_query_results(self, query_results_list):  
-        """複数のクエリ結果を設定して、それぞれのタイムラインを作成"""  
+        """VALID_HAND_TYPES毎にタイムラインを作成"""  
         # 既存のタイムラインをクリア  
         self.clear_timelines()  
-          
+        
+        # VALID_HAND_TYPESでグループ化  
+        from STTDataStructures import QueryParser  
+        hand_type_groups = {  
+            'LeftHand': [],  
+            'RightHand': [],  
+            'BothHands': [],  
+            'None': []  
+        }  
+        
         for query_result in query_results_list:  
-            timeline_widget = self.create_query_timeline(query_result)  
-            self.timeline_widgets.append(timeline_widget)  
-            self.layout.addWidget(timeline_widget)  
-          
+            try:  
+                hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)  
+                if hand_type in hand_type_groups:  
+                    hand_type_groups[hand_type].append(query_result)  
+            except:  
+                # パースできない場合はNoneに分類  
+                hand_type_groups['None'].append(query_result)  
+        
+        # 各hand typeに対してタイムラインを作成  
+        for hand_type, queries in hand_type_groups.items():  
+            if queries:  # クエリがある場合のみタイムラインを作成  
+                timeline_widget = self.create_hand_type_timeline(hand_type, queries)  
+                self.timeline_widgets.append(timeline_widget)  
+                self.layout.addWidget(timeline_widget)  
+        
         # 動画の長さが既に設定されている場合は、全タイムラインに適用  
         if self.video_duration > 0:  
-            self.set_video_duration(self.video_duration)
-      
-    def create_query_timeline(self, query_result):    
-        """単一クエリ用のタイムラインウィジェットを作成"""    
-        container = QWidget()    
-        container_layout = QVBoxLayout()    
-            
-        # QueryResultsオブジェクトのプロパティにアクセス  
-        query_text = query_result.query_text if hasattr(query_result, 'query_text') else f"Query {getattr(query_result, 'query_id', 'Unknown')}"  
-        query_label = QLabel(f"Query: {query_text}")    
-        query_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #f0f0f0;")    
-        container_layout.addWidget(query_label)    
-            
-        # タイムラインビューア    
-        timeline = TimelineViewer()    
-        timeline.setMinimumHeight(80)    
-        timeline.setMaximumHeight(120)    
-            
-        # 重要：新しく作成したタイムラインに動画の長さを設定    
-        if self.video_duration > 0:    
-            timeline.set_video_duration(self.video_duration)    
-            print(f"Set duration {self.video_duration} to new timeline")    
-            
-        # QueryResultsオブジェクトのプロパティからデータを取得  
-        intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
-        timeline.set_intervals(intervals)    
-        timeline.set_saliency_scores(query_result.saliency_scores if hasattr(query_result, 'saliency_scores') else [])    
-            
-        container_layout.addWidget(timeline)    
-        container.setLayout(container_layout)    
-      
-        # タイムラインのクリックイベントを接続    
-        timeline.intervalClicked.connect(    
-            lambda interval: self.on_interval_clicked(interval, query_result)    
-        )    
-            
-        return container
+            self.set_video_duration(self.video_duration)  
       
     def clear_timelines(self):  
         """既存のタイムラインをクリア"""  
@@ -112,3 +96,48 @@ class MultiTimelineViewer(QWidget):
         """区間がクリックされた時の処理"""  
         # メインウィンドウに通知  
         self.intervalClicked.emit(interval, query_result)
+
+    def create_hand_type_timeline(self, hand_type: str, query_results: list):  
+        """手の種類毎のタイムラインウィジェットを作成"""  
+        container = QWidget()  
+        container_layout = QVBoxLayout()  
+        
+        # 手の種類のラベル  
+        hand_label = QLabel(f"Hand Type: {hand_type}")  
+        hand_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #e0e0e0; font-size: 14px;")  
+        container_layout.addWidget(hand_label)  
+        
+        # タイムラインビューア  
+        timeline = TimelineViewer()  
+        timeline.setMinimumHeight(100)  
+        timeline.setMaximumHeight(150)  
+        
+        # 重要：新しく作成したタイムラインに動画の長さを設定  
+        if self.video_duration > 0:  
+            timeline.set_video_duration(self.video_duration)  
+        
+        # 全ての区間を統合（クエリ情報は既に埋め込まれている）  
+        all_intervals = []  
+        for query_result in query_results:  
+            intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
+            all_intervals.extend(intervals)  
+        
+        timeline.set_intervals(all_intervals)  
+        
+        container_layout.addWidget(timeline)  
+        container.setLayout(container_layout)  
+        
+        # タイムラインのクリックイベントを接続（簡素化版）  
+        timeline.intervalClicked.connect(self.on_interval_clicked_with_embedded_query)  
+        
+        return container
+
+    def on_interval_clicked_with_embedded_query(self, interval):  
+        """区間がクリックされた時の処理（埋め込まれたクエリ情報を使用）"""  
+        # 区間に埋め込まれたクエリ情報を直接取得  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            query_result = interval.query_result  
+            # メインウィンドウに通知  
+            self.intervalClicked.emit(interval, query_result)  
+        else:  
+            print(f"Warning: No query information found for interval {interval}")

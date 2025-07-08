@@ -2,6 +2,7 @@ import json
 from pathlib import Path  
 from typing import Dict, List, Optional  
 from datetime import datetime  
+from dataclasses import asdict
 from STTDataStructures import *  
 from Results import QueryResults, InferenceResults  
 from VideoInfo import VideoInfo  
@@ -126,21 +127,21 @@ class STTDataManager:
           
         # データクラスを辞書に変換  
         def to_dict(obj):  
-            if hasattr(obj, '__dict__'):  
+            if hasattr(obj, '__dataclass_fields__'):  # dataclassの場合  
                 result = {}  
-                for key, value in obj.__dict__.items():  
-                    if isinstance(value, list):  
-                        result[key] = [to_dict(item) for item in value]  
-                    elif isinstance(value, dict):  
-                        result[key] = {k: to_dict(v) for k, v in value.items()}  
-                    elif hasattr(value, '__dict__'):  
-                        result[key] = to_dict(value)  
-                    else:  
-                        result[key] = value  
+                for field_name in obj.__dataclass_fields__:  
+                    value = getattr(obj, field_name)  
+                    result[field_name] = to_dict(value)  
                 return result  
-            return obj  
+            elif isinstance(value, list):  
+                return [to_dict(item) for item in value]  
+            elif isinstance(value, dict):  
+                return {k: to_dict(v) for k, v in value.items()}  
+            else:  
+                return value  
           
-        data_dict = to_dict(self.stt_dataset)  
+        data_dict = asdict(self.stt_dataset)
+        #data_dict = to_dict(self.stt_dataset)  
           
         with open(file_path, 'w', encoding='utf-8') as f:  
             json.dump(data_dict, f, indent=2, ensure_ascii=False)
