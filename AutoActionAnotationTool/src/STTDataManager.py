@@ -125,23 +125,8 @@ class STTDataManager:
         # データ作成日時を更新  
         self.stt_dataset.info["data_created"] = datetime.now().strftime("%Y/%m/%d")  
           
-        # データクラスを辞書に変換  
-        def to_dict(obj):  
-            if hasattr(obj, '__dataclass_fields__'):  # dataclassの場合  
-                result = {}  
-                for field_name in obj.__dataclass_fields__:  
-                    value = getattr(obj, field_name)  
-                    result[field_name] = to_dict(value)  
-                return result  
-            elif isinstance(value, list):  
-                return [to_dict(item) for item in value]  
-            elif isinstance(value, dict):  
-                return {k: to_dict(v) for k, v in value.items()}  
-            else:  
-                return value  
-          
+        # データクラスを辞書に変換            
         data_dict = asdict(self.stt_dataset)
-        #data_dict = to_dict(self.stt_dataset)  
           
         with open(file_path, 'w', encoding='utf-8') as f:  
             json.dump(data_dict, f, indent=2, ensure_ascii=False)
