@@ -69,16 +69,18 @@ class QueryParser:
     @staticmethod  
     def validate_and_parse_query(query_text: str) -> Tuple[str, ActionData]:  
         """クエリテキストを検証し、アクション要素を抽出"""  
+        print(f"DEBUG: Parsing query: '{query_text}'")  
         parts = query_text.split('_')  
-          
-        # 形式チェック：必ず5つの要素が必要  
+        print(f"DEBUG: Query parts: {parts} (count: {len(parts)})")  
+        
         if len(parts) != 5:  
-            raise QueryValidationError(  
-                f"クエリ形式が不正です。5つの要素が必要ですが、{len(parts)}個の要素が見つかりました: '{query_text}'"  
-            )  
-          
+            error_msg = f"クエリ形式が不正です。5つの要素が必要ですが、{len(parts)}個の要素が見つかりました: '{query_text}'"  
+            print(f"DEBUG: {error_msg}")  
+            raise QueryValidationError(error_msg)  
+        
         hand_type, action_verb, manipulated_object, target_object, tool = parts  
-          
+        print(f"DEBUG: Parsed - hand_type: {hand_type}, action_verb: {action_verb}")
+
         # 手の種類の検証  
         if hand_type not in QueryParser.VALID_HAND_TYPES:  
             raise QueryValidationError(  
