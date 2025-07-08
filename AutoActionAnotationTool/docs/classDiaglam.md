@@ -8,243 +8,441 @@ moment_detrの推論結果JSONファイルを読み込んで動画の検出区�
 
 ```mermaid
 classDiagram
-    class DetectionInterval {
-        +float start_time
-        +float end_time
-        +float confidence_score
-        +Optional~int~ query_id
-        +Optional~string~ label
-        +property duration() float
-        +overlaps_with(other) bool
-    }
-
-    class QueryResults {
-        +string query_text
-        +string video_id
-        +List~DetectionInterval~ relevant_windows
-        +List~float~ saliency_scores
-        +Optional~int~ query_id
-        +from_moment_detr_json(json_data, index) QueryResults
-    }
-
-    class InferenceResults {
-        +List~QueryResults~ results
-        +datetime timestamp
-        +dict model_info
-        +Optional~string~ video_path
-        +Optional~int~ total_queries
-        +get_results_for_video(video_id) List~QueryResults~
-    }
-
-    class VideoInfo {
-        +string video_id
-        +string file_path
-        +float duration
-        +float fps
-        +int width
-        +int height
-    }
-
-    class InferenceResultsLoader {
-        +load_from_json(file_path) InferenceResults
-        +load_from_jsonl(file_path) InferenceResults
-    }
-
-    class InferenceResultsSaver {
-        +save_to_json(results, file_path)
-        +save_to_jsonl(results, file_path)
-    }
-
-    class SaliencyFilter {
-        +float threshold
-        +filter_by_saliency(query_results) List~Tuple~
-        +get_salient_intervals(query_results, clip_duration) List~DetectionInterval~
-        +apply_temporal_smoothing(saliency_scores, window_size) List~float~
-    }
-
-    class VideoPlayerController {
-        +QMediaPlayer video_player
-        +QVideoWidget video_widget
-        +QPushButton play_button
-        +QSlider position_slider
-        +QLabel time_label
-        +get_video_widget() QVideoWidget
-        +get_controls_layout() QHBoxLayout
-        +load_video(video_path)
-        +toggle_playback()
-        +seek_to_time(time_seconds)
-        ~positionChanged pyqtSignal
-        ~durationChanged pyqtSignal
-    }
-
-    class TimelineViewer {
-        +float video_duration
-        +List~DetectionInterval~ intervals
-        +float playhead_position
-        +create_timeline_widget() QWidget
-        +set_intervals(intervals)
-        +update_playhead_position(position)
-        +draw_timeline()
-        +on_click(event)
-        ~intervalClicked pyqtSignal
-    }
-
-    class MultiTimelineViewer {
-        +List~TimelineViewer~ timeline_widgets
-        +QScrollArea scroll_area
-        +set_query_results(query_results_list)
-        +create_query_timeline(query_result) QWidget
-        +set_video_duration(duration)
-        +update_playhead_position(position)
-        ~intervalClicked pyqtSignal
-    }
-
-    class ResultsManager {
-        +InferenceResults inference_results
-        +QueryResults current_query_results
-        +float confidence_threshold
-        +float saliency_threshold
-        +InferenceResultsLoader inference_loader
-        +InferenceResultsSaver inference_saver
-        +load_inference_results(json_path)
-        +save_inference_results(file_path)
-        +set_ui_components(query_combo, results_list, confidence_label)
-        +get_all_results() List~QueryResults~
-        ~querySelected pyqtSignal
-        ~intervalSelected pyqtSignal
-        ~resultsUpdated pyqtSignal
-    }
-
-    class IntervalEditController {
-        +int selected_interval_index
-        +QueryResults current_query_results
-        +QDoubleSpinBox start_spinbox
-        +QDoubleSpinBox end_spinbox
-        +QLabel confidence_label
-        +QPushButton apply_button
-        +QPushButton delete_button
-        +QPushButton add_button
-        +set_ui_components(...)
-        +set_current_query_results(query_results)
-        +set_selected_interval(interval, index)
-        +apply_interval_changes()
-        +delete_interval()
-        +add_new_interval()
-        ~intervalUpdated pyqtSignal
-        ~intervalDeleted pyqtSignal
-        ~intervalAdded pyqtSignal
-    }
-
-    class FileManager {
-        +open_video_dialog(parent) string
-        +load_inference_results_dialog(parent) string
-        +save_results_dialog(parent) string
-        +validate_video_file(file_path) bool
-        +show_save_success_message(file_path, parent)
-        +show_no_results_warning(parent)
-        ~videoLoaded pyqtSignal
-        ~resultsLoaded pyqtSignal
-        ~resultsSaved pyqtSignal
-    }
-
-    class UILayoutManager {
-        +dict ui_components
-        +create_main_layout(left_panel, right_panel) QHBoxLayout
-        +create_left_panel(video_widget, controls_layout, multi_timeline_viewer) QWidget
-        +create_right_panel() tuple~QWidget, dict~
-        +create_query_selection_group() tuple~QGroupBox, dict~
-        +create_filter_controls_group() tuple~QGroupBox, dict~
-        +create_interval_edit_group() tuple~QGroupBox, dict~
-    }
-
-    class ApplicationController {
-        +VideoInfo video_info
-        +InferenceResults inference_results
-        +QueryResults current_query_results
-        +InferenceResultsLoader loader
-        +InferenceResultsSaver saver
-        +SaliencyFilter saliency_filter
-        +load_video(video_path) VideoInfo
-        +load_inference_results(results_path)
-        +get_results_for_current_video() List~QueryResults~
-        +save_inference_results(file_path)
-        +filter_intervals_by_confidence(intervals, threshold) List~DetectionInterval~
-        ~intervalChanged pyqtSignal
-    }
-
-    class FilterController {
-        +ApplicationController app_controller
-        +float confidence_threshold
-        +float saliency_threshold
-        +set_confidence_threshold(threshold)
-        +set_saliency_threshold(threshold)
-        ~filtersChanged pyqtSignal
-    }
-
     class MainApplicationWindow {
-        +VideoPlayerController video_controller
-        +ResultsManager results_manager
-        +IntervalEditController interval_edit_controller
-        +FileManager file_manager
-        +UILayoutManager ui_layout_manager
-        +ApplicationController app_controller
-        +FilterController filter_controller
-        +MultiTimelineViewer multi_timeline_viewer
+        +video_controller: VideoPlayerController
+        +results_manager: ResultsManager
+        +file_manager: FileManager
+        +ui_layout_manager: UILayoutManager
+        +app_controller: ApplicationController
+        +filter_controller: FilterController
+        +stt_data_manager: STTDataManager
+        +hand_type_filter_manager: HandTypeFilterManager
+        +integrated_edit_widget: IntegratedEditWidget
+        +multi_timeline_viewer: MultiTimelineViewer
+        +confidence_slider: QSlider
+        +confidence_value_label: QLabel
         +setup_ui()
         +setup_connections()
         +setup_menus()
-        +create_left_panel() QWidget
-        +create_right_panel() tuple~QWidget, dict~
-        +setup_controller_ui_components(ui_components)
+        +create_left_panel()
+        +create_right_panel()
+        +setup_controller_ui_components()
+        +load_video_from_path()
+        +load_inference_results_from_path()
+        +save_results()
+        +export_stt_dataset()
+        +on_video_position_changed()
+        +on_video_duration_changed()
+        +on_hand_type_filter_changed()
+        +on_interval_selected()
+        +on_results_updated()
+        +on_timeline_interval_clicked()
+        +update_confidence_filter()
+        +apply_filters()
+        +update_display()
+    }
+
+    class ApplicationController {
+        +video_info: VideoInfo
+        +inference_results: InferenceResults
+        +current_query_results: QueryResults
+        +loader: InferenceResultsLoader
+        +saver: InferenceResultsSaver
+        +saliency_filter: SaliencyFilter
+        +load_video()
+        +load_inference_results()
+        +get_results_for_current_video()
+        +apply_saliency_filter()
+    }
+
+    class IntervalModificationController {
+        +app_controller: ApplicationController
+        +modify_interval()
+        ~intervalChanged: pyqtSignal
+    }
+
+    class FilterController {
+        +app_controller: ApplicationController
+        +confidence_threshold: float
+        +saliency_threshold: float
+        +set_confidence_threshold()
+        +set_saliency_threshold()
+        ~filtersChanged: pyqtSignal
+    }
+
+    class VideoPlayerController {
+        +video_player: QMediaPlayer
+        +video_widget: QVideoWidget
+        +play_button: QPushButton
+        +position_slider: QSlider
+        +time_label: QLabel
+        +current_video_path: str
+        +setup_player()
+        +setup_connections()
+        +get_video_widget()
+        +get_controls_layout()
+        +load_video()
+        +toggle_playback()
+        +update_position()
+        +update_duration()
+        +set_position()
+        +seek_to_time()
+        +get_duration_seconds()
+        +get_position_seconds()
+        +update_time_label()
+        ~positionChanged: pyqtSignal
+        ~durationChanged: pyqtSignal
+    }
+
+    class ResultsManager {
+        +all_results: List[QueryResults]
+        +filtered_results: List[QueryResults]
+        +confidence_threshold: float
+        +inference_loader: InferenceResultsLoader
+        +inference_saver: InferenceResultsSaver
+        +_hand_type_combo_widget: QComboBox
+        +_results_list_widget: QListWidget
+        +set_ui_components()
+        +load_inference_results()
+        +update_filtered_results()
+        +update_results_display()
+        +_group_results_by_hand_type()
+        +on_result_item_clicked()
+        +set_confidence_threshold()
+        +get_all_results()
+        +get_filtered_results()
+        +save_results()
+        ~intervalSelected: pyqtSignal
+        ~resultsUpdated: pyqtSignal
+    }
+
+    class FileManager {
+        +open_video_dialog()
+        +load_inference_results_dialog()
+        +save_results_dialog()
+        +validate_video_file()
+        +validate_json_file()
+        +show_save_success_message()
+        +show_save_error_message()
+        +show_load_error_message()
+        +show_no_results_warning()
+        ~videoLoaded: pyqtSignal
+        ~resultsLoaded: pyqtSignal
+        ~resultsSaved: pyqtSignal
+    }
+
+    class UILayoutManager {
+        +ui_components: dict
+        +hand_type_filter_manager: HandTypeFilterManager
+        +integrated_edit_widget: IntegratedEditWidget
+        +create_main_layout()
+        +create_left_panel()
+        +create_right_panel()
+        +create_hand_type_filter_group()
+        +create_detection_results_group()
+        +create_confidence_filter_group()
+    }
+
+    class HandTypeFilterManager {
+        +current_filter: str
+        +all_results: List[QueryResults]
+        +set_results()
+        +set_filter()
+        +get_filtered_results()
+        +get_grouped_results()
+        ~filterChanged: pyqtSignal
+    }
+
+    class IntegratedEditWidget {
+        +current_query_result: QueryResults
+        +selected_interval: DetectionInterval
+        +selected_interval_index: int
+        +stt_data_manager: STTDataManager
+        +current_video_name: str
+        +tab_widget: QTabWidget
+        +action_tab: QWidget
+        +step_tab: QWidget
+        +start_spinbox: QDoubleSpinBox
+        +end_spinbox: QDoubleSpinBox
+        +confidence_label: QLabel
+        +hand_combo: QComboBox
+        +action_verb_edit: QLineEdit
+        +manipulated_object_edit: QLineEdit
+        +target_object_edit: QLineEdit
+        +tool_edit: QLineEdit
+        +step_list: QListWidget
+        +step_text_edit: QLineEdit
+        +step_edit_text: QLineEdit
+        +step_start_spin: QDoubleSpinBox
+        +step_end_spin: QDoubleSpinBox
+        +setup_ui()
+        +create_action_edit_tab()
+        +create_step_edit_tab()
+        +set_stt_data_manager()
+        +set_current_video()
+        +set_current_query_results()
+        +set_selected_interval()
+        +clear_selection()
+        +update_interval_ui()
+        +apply_interval_changes()
+        +delete_interval()
+        +add_new_interval()
+        +refresh_step_list()
+        +on_step_selected()
+        +add_step()
+        +apply_step_changes()
+        +delete_step()
+        ~dataChanged: pyqtSignal
+        ~intervalUpdated: pyqtSignal
+        ~intervalDeleted: pyqtSignal
+        ~intervalAdded: pyqtSignal
+    }
+
+    class STTDataManager {
+        +stt_dataset: STTDataset
+        +action_id_counter: int
+        +step_id_counter: int
+        +add_video_data()
+        +add_inference_results()
+        +add_step()
+        +_get_or_create_action_category()
+        +_get_or_create_step_category()
+        +update_video_subset()
+        +export_to_json()
+    }
+
+    class STTExportDialog {
+        +video_names: List[str]
+        +subset_settings: dict
+        +subset_combos: dict
+        +ok_button: QPushButton
+        +cancel_button: QPushButton
+        +setup_ui()
+        +get_subset_settings()
+    }
+
+    class MultiTimelineViewer {
+        +timeline_widgets: List[QWidget]
+        +scroll_area: QScrollArea
+        +content_widget: QWidget
+        +layout: QVBoxLayout
+        +video_duration: float
+        +set_query_results()
+        +create_hand_type_timeline()
+        +on_interval_clicked_with_embedded_query()
+        +clear_timelines()
+        +set_video_duration()
+        +update_playhead_position()
+        ~intervalClicked: pyqtSignal
+    }
+
+    class TimelineViewer {
+        +video_duration: float
+        +current_position: float
+        +intervals: List[DetectionInterval]
+        +saliency_scores: List[float]
+        +time_scale_enabled: bool
+        +clip_duration: float
+        +set_video_duration()
+        +set_intervals()
+        +set_saliency_scores()
+        +paintEvent()
+        +draw_saliency_heatmap()
+        +draw_interval()
+        +draw_current_position()
+        +draw_time_scale()
+        +calculate_scale_interval()
+        +enable_time_scale()
+        +update_playhead_position()
+        +mousePressEvent()
+        ~intervalClicked: pyqtSignal
+        ~timePositionChanged: pyqtSignal
+    }
+
+    class QueryResults {
+        +query_text: str
+        +video_id: str
+        +relevant_windows: List[DetectionInterval]
+        +saliency_scores: List[float]
+        +query_id: Optional[int]
+        +from_moment_detr_json()
+    }
+
+    class DetectionInterval {
+        +start_time: float
+        +end_time: float
+        +confidence_score: float
+        +query_id: Optional[int]
+        +label: Optional[str]
+        +query_result: Optional[object]
+        +duration: property
+        +overlaps_with()
+        +__eq__()
+        +__hash__()
+    }
+
+    class InferenceResults {
+        +results: List[QueryResults]
+        +timestamp: datetime
+        +model_info: dict
+        +video_path: Optional[str]
+        +total_queries: Optional[int]
+        +get_results_for_video()
+    }
+
+    class InferenceResultsLoader {
+        +load_from_json()
+    }
+
+    class InferenceResultsSaver {
+        +save_to_json()
+    }
+
+    class SaliencyFilter {
+        +threshold: float
+        +filter_by_saliency()
+        +get_salient_intervals()
+        +apply_temporal_smoothing()
+    }
+
+    class VideoInfo {
+        +video_id: str
+        +file_path: str
+        +duration: float
+        +fps: float
+        +width: int
+        +height: int
+        +clip_duration: float
+        +total_clips: property
+    }
+
+    class ActionData {
+        +action_verb: str
+        +manipulated_object: Optional[str]
+        +target_object: Optional[str]
+        +tool: Optional[str]
+    }
+
+    class ActionEntry {
+        +action: ActionData
+        +ids: List[int]
+        +id: int
+        +segment: List[float]
+        +segment_frames: List[int]
+    }
+
+    class StepEntry {
+        +step: str
+        +id: int
+        +segment: List[float]
+        +segment_frames: List[int]
+    }
+
+    class VideoData {
+        +subset: str
+        +duration: float
+        +fps: float
+        +actions: Dict[str, List[ActionEntry]]
+        +steps: List[StepEntry]
+    }
+
+    class ActionCategory {
+        +id: int
+        +interaction: str
+    }
+
+    class StepCategory {
+        +id: int
+        +step: str
+    }
+
+    class STTDataset {
+        +info: Dict[str, Any]
+        +database: Dict[str, VideoData]
+        +action_categories: List[ActionCategory]
+        +step_categories: List[StepCategory]
+    }
+
+    class QueryParser {
+        +VALID_HAND_TYPES: Set[str]
+        +validate_and_parse_query()
+        +detect_hand_type()
+    }
+
+    class QueryValidationError {
+        <<Exception>>
     }
 
     %% 関係性
-    InferenceResults --> QueryResults : 含有
-    QueryResults --> DetectionInterval : 含有
-    ApplicationController --> VideoInfo : 参照
-    
-    InferenceResultsLoader --> InferenceResults : 作成
-    InferenceResultsLoader --> QueryResults : 作成
-    InferenceResultsLoader --> DetectionInterval : 作成
-    
-    InferenceResultsSaver --> InferenceResults : 使用
-    
-    SaliencyFilter --> DetectionInterval : フィルタ
-    SaliencyFilter --> QueryResults : フィルタ
-    
-    VideoPlayerController --> VideoInfo : 使用
-    
-    TimelineViewer --> DetectionInterval : 表示
-    MultiTimelineViewer --> TimelineViewer : 含有
-    MultiTimelineViewer --> QueryResults : 表示
-    
-    ResultsManager --> InferenceResults : 管理
-    ResultsManager --> InferenceResultsLoader : 使用
-    ResultsManager --> InferenceResultsSaver : 使用
-    
-    IntervalEditController --> DetectionInterval : 編集
-    
-    ApplicationController --> InferenceResults : 管理
-    ApplicationController --> VideoInfo : 参照
-    ApplicationController --> SaliencyFilter : 使用
-    ApplicationController --> InferenceResultsLoader : 使用
-    ApplicationController --> InferenceResultsSaver : 使用
-    
-    FilterController --> ApplicationController : 参照
-    FilterController --> SaliencyFilter : 制御
-    
-    FileManager --> QFileDialog : 使用
-    
-    UILayoutManager --> QWidget : 作成
-    
-    MainApplicationWindow --> VideoPlayerController : 統制
-    MainApplicationWindow --> ResultsManager : 統制
-    MainApplicationWindow --> IntervalEditController : 統制
-    MainApplicationWindow --> FileManager : 統制
-    MainApplicationWindow --> UILayoutManager : 統制
-    MainApplicationWindow --> ApplicationController : 統制
-    MainApplicationWindow --> FilterController : 統制
-    MainApplicationWindow --> MultiTimelineViewer : 表示
+    MainApplicationWindow --> VideoPlayerController
+    MainApplicationWindow --> ResultsManager
+    MainApplicationWindow --> FileManager
+    MainApplicationWindow --> UILayoutManager
+    MainApplicationWindow --> ApplicationController
+    MainApplicationWindow --> FilterController
+    MainApplicationWindow --> STTDataManager
+    MainApplicationWindow --> HandTypeFilterManager
+    MainApplicationWindow --> IntegratedEditWidget
+    MainApplicationWindow --> MultiTimelineViewer
+
+    UILayoutManager --> HandTypeFilterManager
+    UILayoutManager --> IntegratedEditWidget
+
+    ApplicationController --> VideoInfo
+    ApplicationController --> InferenceResults
+    ApplicationController --> InferenceResultsLoader
+    ApplicationController --> InferenceResultsSaver
+    ApplicationController --> SaliencyFilter
+
+    IntervalModificationController --> ApplicationController
+    IntervalModificationController --> DetectionInterval
+
+    FilterController --> ApplicationController
+
+    ResultsManager --> InferenceResultsLoader
+    ResultsManager --> InferenceResultsSaver
+    ResultsManager --> QueryParser
+
+    HandTypeFilterManager --> QueryResults
+    HandTypeFilterManager --> QueryParser
+    HandTypeFilterManager --> QueryValidationError
+
+    IntegratedEditWidget --> QueryResults
+    IntegratedEditWidget --> DetectionInterval
+    IntegratedEditWidget --> STTDataManager
+    IntegratedEditWidget --> ActionEntry
+    IntegratedEditWidget --> StepEntry
+    IntegratedEditWidget --> QueryParser
+
+    STTDataManager --> STTDataset
+    STTDataManager --> VideoInfo
+    STTDataManager --> QueryResults
+    STTDataManager --> ActionEntry
+    STTDataManager --> StepEntry
+    STTDataManager --> ActionCategory
+    STTDataManager --> StepCategory
+    STTDataManager --> QueryParser
+    STTDataManager --> QueryValidationError
+
+    STTExportDialog --> STTDataManager
+
+    MultiTimelineViewer --> TimelineViewer
+    MultiTimelineViewer --> QueryParser
+    MultiTimelineViewer --> QueryValidationError
+
+    TimelineViewer --> DetectionInterval
+
+    InferenceResults --> QueryResults
+    QueryResults --> DetectionInterval
+
+    STTDataset --> VideoData
+    STTDataset --> ActionCategory
+    STTDataset --> StepCategory
+
+    VideoData --> ActionEntry
+    VideoData --> StepEntry
+
+    ActionEntry --> ActionData
 ```
 
 ## 主要な設計決定
