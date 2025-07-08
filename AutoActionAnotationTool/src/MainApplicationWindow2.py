@@ -1,25 +1,22 @@
 import sys    
-import os  
 import argparse  
 from pathlib import Path
   
-from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox  
+from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox, QDialog
 from PyQt6.QtGui import QAction  
-from PyQt6.QtCore import pyqtSlot  
   
 from MultiTimelineViewer import MultiTimelineViewer  
 from ApplicationController import ApplicationController, FilterController  
   
-# 新しく分離したクラスをインポート  
 from VideoPlayerController import VideoPlayerController  
 from ResultsManager import ResultsManager  
 from IntervalEditController import IntervalEditController  
 from FileManager import FileManager  
 from UILayoutManager import UILayoutManager  
   
-# STT関連の新しいクラスをインポート  
 from STTDataManager import STTDataManager  
 from STTEditWidget import STTEditWidget  
+from STTExportDialog import STTExportDialog
   
 class MainApplicationWindow(QMainWindow):    
     def __init__(self):    
@@ -270,24 +267,35 @@ class MainApplicationWindow(QMainWindow):
                 self.file_manager.show_save_error_message(str(e), self)  
       
     def export_stt_dataset(self):  
-        """STT Dataset形式でエクスポート"""  
+        """STT Dataset形式でエクスポート（ダイアログ付き）"""  
         if not self.stt_data_manager.stt_dataset.database:  
             QMessageBox.warning(self, "Warning", "No video data to export.")  
             return  
-              
-        file_path, _ = QFileDialog.getSaveFileName(  
-            self,   
-            "Export STT Dataset",   
-            "stt_dataset.json",   
-            "JSON Files (*.json)"  
-        )  
-          
-        if file_path:  
-            try:  
-                self.stt_data_manager.export_to_json(file_path)  
-                QMessageBox.information(self, "Success", f"STT Dataset exported to {file_path}")  
-            except Exception as e:  
-                QMessageBox.critical(self, "Error", f"Failed to export STT Dataset: {str(e)}")  
+        
+        # エクスポートダイアログを表示  
+        video_names = list(self.stt_data_manager.stt_dataset.database.keys())  
+        dialog = STTExportDialog(video_names, self)  
+        
+        if dialog.exec() == QDialog.DialogCode.Accepted:  
+            # ダイアログで設定されたsubset情報を適用  
+            subset_settings = dialog.get_subset_settings()  
+            for video_name, subset in subset_settings.items():  
+                self.stt_data_manager.update_video_subset(video_name, subset)  
+            
+            # ファイル保存ダイアログ  
+            file_path, _ = QFileDialog.getSaveFileName(  
+                self,   
+                "Export STT Dataset",   
+                "stt_dataset.json",   
+                "JSON Files (*.json)"  
+            )  
+            
+            if file_path:  
+                try:  
+                    self.stt_data_manager.export_to_json(file_path)  
+                    QMessageBox.information(self, "Success", f"STT Dataset exported to {file_path}")  
+                except Exception as e:  
+                    QMessageBox.critical(self, "Error", f"Failed to export STT Dataset: {str(e)}")
   
     def load_video_from_path(self, video_path: str):    
         """指定されたパスから動画を読み込む"""    

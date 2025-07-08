@@ -20,10 +20,6 @@ class STTEditWidget(QWidget):
         # タブウィジェット  
         self.tab_widget = QTabWidget()  
           
-        # 動画設定タブ  
-        self.video_tab = self.create_video_settings_tab()  
-        self.tab_widget.addTab(self.video_tab, "Video Settings")  
-          
         # アクション編集タブ  
         self.action_tab = self.create_action_edit_tab()  
         self.tab_widget.addTab(self.action_tab, "Actions")  
@@ -34,26 +30,6 @@ class STTEditWidget(QWidget):
           
         layout.addWidget(self.tab_widget)  
         self.setLayout(layout)  
-      
-    def create_video_settings_tab(self):  
-        widget = QWidget()  
-        layout = QVBoxLayout()  
-          
-        # サブセット選択  
-        subset_group = QGroupBox("Dataset Subset")  
-        subset_layout = QHBoxLayout()  
-          
-        self.subset_combo = QComboBox()  
-        self.subset_combo.addItems(["train", "validation", "test"])  
-        self.subset_combo.currentTextChanged.connect(self.on_subset_changed)  
-          
-        subset_layout.addWidget(QLabel("Subset:"))  
-        subset_layout.addWidget(self.subset_combo)  
-        subset_group.setLayout(subset_layout)  
-          
-        layout.addWidget(subset_group)  
-        widget.setLayout(layout)  
-        return widget  
       
     def create_action_edit_tab(self):  
         widget = QWidget()  
@@ -203,9 +179,6 @@ class STTEditWidget(QWidget):
               
         # サブセット設定を更新  
         if self.current_video_name in self.stt_data_manager.stt_dataset.database:  
-            video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
-            self.subset_combo.setCurrentText(video_data.subset)  
-              
             # アクションリストを更新  
             self.refresh_action_list()  
               
@@ -241,13 +214,7 @@ class STTEditWidget(QWidget):
             item = QListWidgetItem(step.step)  
             item.setData(1, i)  # step index  
             self.step_list.addItem(item)  
-      
-    def on_subset_changed(self, subset: str):  
-        """サブセット変更時の処理"""  
-        if self.stt_data_manager and self.current_video_name:  
-            self.stt_data_manager.update_video_subset(self.current_video_name, subset)  
-            self.dataChanged.emit()  
-      
+            
     def on_action_selected(self, item):  
         """アクション選択時の処理"""  
         if not self.stt_data_manager or not self.current_video_name:  
