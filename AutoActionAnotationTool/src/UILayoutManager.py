@@ -97,7 +97,7 @@ class UILayoutManager:
           
         # Hand Type フィルタコンボボックス  
         hand_type_combo = QComboBox()  
-        hand_type_combo.addItems(["All", "LeftHand", "RightHand", "BothHands", "Steps"])  
+        hand_type_combo.addItems(["All", "LeftHand", "RightHand", "BothHands", "Other"])  
         hand_type_combo.currentTextChanged.connect(self.hand_type_filter_manager.set_filter)  
           
         layout.addWidget(QLabel("Hand Type:"))  

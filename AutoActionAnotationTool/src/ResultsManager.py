@@ -132,8 +132,8 @@ class ResultsManager(QObject):
         groups = {  
             "LeftHand": [],  
             "RightHand": [],  
-            "BothHands": [],  
-            "Steps": []  
+            "BothHands": [],
+            "Other": []
         }  
           
         for result in results:  
@@ -145,10 +145,10 @@ class ResultsManager(QObject):
                     groups["RightHand"].append(result)  
                 elif hand_type == "BothHands":  
                     groups["BothHands"].append(result)  
-                else:  # None  
-                    groups["Steps"].append(result)  
+                else: # None  
+                    groups["Other"].append(result)  
             except QueryValidationError:  
-                groups["Steps"].append(result)  
+                groups["Other"].append(result)
           
         return groups  
       

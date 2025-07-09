@@ -26,20 +26,29 @@ class HandTypeFilterManager(QObject):
         """現在のフィルタに基づいて結果を返す"""  
         print(f"DEBUG: Current filter: {self.current_filter}")  
         print(f"DEBUG: Total results: {len(self.all_results)}")  
-        
+    
         if self.current_filter == "All":  
             print(f"DEBUG: Returning all {len(self.all_results)} results")  
             return self.all_results  
-        
+    
         filtered_results = []  
         for result in self.all_results:  
             try:  
                 hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
                 print(f"DEBUG: Query '{result.query_text}' -> hand_type: {hand_type}")  
-                # フィルタリングロジック...  
+                
+                # フィルタリングロジックを実装  
+                if self.current_filter == hand_type:  
+                    filtered_results.append(result)  
+                elif self.current_filter == "Other" and hand_type == "None":  
+                    filtered_results.append(result)
+
             except QueryValidationError as e:  
                 print(f"DEBUG: Query validation error for '{result.query_text}': {e}")  
-        
+                # パースエラーの場合は"Other"に分類  
+                if self.current_filter == "Other":  
+                    filtered_results.append(result)
+    
         print(f"DEBUG: Filtered results count: {len(filtered_results)}")  
         return filtered_results
       
@@ -48,8 +57,8 @@ class HandTypeFilterManager(QObject):
         groups = {  
             "LeftHand": [],  
             "RightHand": [],  
-            "BothHands": [],  
-            "Steps": []  
+            "BothHands": [],
+            "Other": []
         }  
           
         for result in self.all_results:  
@@ -61,9 +70,9 @@ class HandTypeFilterManager(QObject):
                     groups["RightHand"].append(result)  
                 elif hand_type == "BothHands":  
                     groups["BothHands"].append(result)  
-                else:  # None  
-                    groups["Steps"].append(result)  
+                else: # None or その他  
+                    groups["Other"].append(result)  
             except QueryValidationError:  
-                groups["Steps"].append(result)  
+                groups["Other"].append(result)  # パースエラーは"Other"に分類
           
         return groups
