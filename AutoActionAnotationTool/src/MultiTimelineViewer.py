@@ -125,14 +125,12 @@ class MultiTimelineViewer(QWidget):
     def set_video_duration(self, duration: float):    
         """動画の長さを設定し、既存の全タイムラインに適用"""    
         self.video_duration = duration    
-        print(f"MultiTimelineViewer: Setting video duration to {duration}")    
             
         for widget in self.timeline_widgets:    
             timeline = widget.findChild(TimelineViewer)    
             if timeline:    
                 timeline.set_video_duration(duration)  
                 timeline.enable_time_scale(True)  # 目盛り表示を有効化  
-                print(f"Applied duration {duration} to timeline with time scale")  
   
     def update_playhead_position(self, position: float):  
         """プレイヘッド位置を更新"""  

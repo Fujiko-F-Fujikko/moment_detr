@@ -1,8 +1,9 @@
 # ResultsManager.py (修正版)  
-from PyQt6.QtCore import QObject, pyqtSignal  
-from PyQt6.QtWidgets import QComboBox, QListWidget, QListWidgetItem, QLabel  
-from typing import List, Optional  
-from Results import QueryResults, DetectionInterval  
+from PyQt6.QtCore import Qt, QObject, pyqtSignal  
+from PyQt6.QtWidgets import QComboBox, QListWidget, QListWidgetItem
+from PyQt6.QtGui import QColor
+from typing import List  
+from Results import QueryResults  
 from DataHandling import InferenceResultsLoader, InferenceResultsSaver  
 from STTDataStructures import QueryParser, QueryValidationError  
   
@@ -24,11 +25,11 @@ class ResultsManager(QObject):
           
     def set_ui_components(self, hand_type_combo: QComboBox, results_list: QListWidget):  
         """UI要素を設定（hand type filter対応）"""  
-        self._hand_type_combo_widget = hand_type_combo  
-        self._results_list_widget = results_list  
-        
-        print(f"DEBUG: set_ui_components - results_list: {results_list}")  
-        
+        print(f"DEBUG: set_ui_components called with results_list: {results_list}")  
+        self._hand_type_combo_widget = hand_type_combo    
+        self._results_list_widget = results_list    
+        print(f"DEBUG: After setting, self._results_list_widget: {self._results_list_widget}")           
+
         # 結果リストのクリックイベントを接続  
         if self._results_list_widget:  
             print("DEBUG: Connecting itemClicked signal")  
@@ -73,7 +74,9 @@ class ResultsManager(QObject):
     def update_results_display(self):  
         """結果表示を更新"""  
         print(f"DEBUG: update_results_display called")  
-        if not self._results_list_widget:  
+        
+        # より詳細なチェックを追加  
+        if self._results_list_widget is None:  
             print("DEBUG: results_list_widget is None!")  
             return  
         
@@ -89,14 +92,24 @@ class ResultsManager(QObject):
                 continue  
             
             print(f"DEBUG: Adding header for {hand_type}")  
-            # ヘッダー追加...  
+            
+            # ヘッダーアイテムを実際に追加  
+            header_item = QListWidgetItem(f"=== {hand_type} ===")  
+            header_item.setBackground(QColor(230, 230, 230))  
+            header_item.setFlags(header_item.flags() & ~Qt.ItemFlag.ItemIsSelectable)  
+            self._results_list_widget.addItem(header_item)  
             total_items_added += 1  
             
             for result in results:  
                 for i, interval in enumerate(result.relevant_windows):  
                     if interval.confidence_score >= self.confidence_threshold:  
                         print(f"DEBUG: Adding interval {i} for query '{result.query_text}'")  
-                        # アイテム追加...  
+                        
+                        # 区間アイテムを実際に追加  
+                        item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
+                        item = QListWidgetItem(item_text)  
+                        item.setData(1, {'type': 'interval', 'interval': interval, 'index': i})  
+                        self._results_list_widget.addItem(item)  
                         total_items_added += 1  
                         # 区間アイテムを実際に追加  
                         item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
