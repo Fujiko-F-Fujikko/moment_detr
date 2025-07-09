@@ -32,6 +32,17 @@ class ResultsManager(QObject):
 
         # 結果リストのクリックイベントを接続  
         if self._results_list_widget is not None:  
+        # カスタムスタイルシートを適用  
+            self._results_list_widget.setStyleSheet("""  
+                QListWidget::item:selected {  
+                    background-color: #3daee9;  
+                    color: white;  
+                    border: 2px solid #2980b9;  
+                }  
+                QListWidget::item:hover {  
+                    background-color: #e3f2fd;  
+                }  
+            """)  
             print("DEBUG: Connecting itemClicked signal")  
             self._results_list_widget.itemClicked.connect(self.on_result_item_clicked)  
             print("DEBUG: Signal connected successfully")  
@@ -156,9 +167,12 @@ class ResultsManager(QObject):
             print(f"DEBUG: ResultsManager - Emitting intervalSelected for interval {interval.start_time}-{interval.end_time}")  
             self.intervalSelected.emit(interval, index)
 
-    def select_interval_in_list(self, target_interval, query_result):  
+    def select_interval_in_list(self, target_interval):  
         """Detection Resultsリストで指定された区間を選択"""  
         print(f"DEBUG: ResultsManager - select_interval_in_list called for {target_interval.start_time}-{target_interval.end_time}")  
+        
+        # 既存の選択をクリア  
+        self._results_list_widget.clearSelection()  
         
         for i in range(self._results_list_widget.count()):  
             item = self._results_list_widget.item(i)  
@@ -168,9 +182,17 @@ class ResultsManager(QObject):
                 if (interval.start_time == target_interval.start_time and   
                     interval.end_time == target_interval.end_time):  
                     print(f"DEBUG: ResultsManager - Found matching interval, selecting item {i}")  
+                    
+                    # 選択状態を設定  
                     self._results_list_widget.setCurrentItem(item)  
-                    self._results_list_widget.scrollToItem(item)  
-                    return  
+                    item.setSelected(True)  
+                    
+                    # スクロールして表示  
+                    self._results_list_widget.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
+                    
+                    # フォーカスを設定  
+                    self._results_list_widget.setFocus()  
+                    return
       
     print(f"DEBUG: ResultsManager - No matching interval found in list")
 

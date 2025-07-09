@@ -16,11 +16,10 @@ from VideoPlayerController import VideoPlayerController
 from ResultsManager import ResultsManager  
 from FileManager import FileManager  
 from UILayoutManager import UILayoutManager  
+from TimelineViewer import TimelineViewer
   
 # STT関連の新しいクラスをインポート  
 from STTDataManager import STTDataManager  
-from HandTypeFilterManager import HandTypeFilterManager  
-from IntegratedEditWidget import IntegratedEditWidget  
   
 class MainApplicationWindow(QMainWindow):  
     def __init__(self):  
@@ -185,12 +184,14 @@ class MainApplicationWindow(QMainWindow):
             if self.results_manager.get_all_results():  
                 self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())  
                 
-    def highlight_interval_on_timeline(self, interval, query_result):  
+    def highlight_interval_on_timeline(self, interval):  
         """タイムライン上で指定された区間をハイライト"""  
-        # MultiTimelineViewerに選択状態を通知  
-        if hasattr(self.multi_timeline_viewer, 'highlight_interval'):  
-            self.multi_timeline_viewer.highlight_interval(interval, query_result)
-          
+        # 全てのタイムラインで該当する区間をハイライト  
+        for widget in self.multi_timeline_viewer.timeline_widgets:  
+            timeline = widget.findChild(TimelineViewer)  
+            if timeline:  
+                timeline.set_highlighted_interval(interval)
+
     def on_interval_updated(self):  
         """区間が更新された時の処理"""  
         self.results_manager.update_results_display()  
@@ -319,15 +320,18 @@ class MainApplicationWindow(QMainWindow):
         self.results_manager.update_filtered_results(filtered_results)  
         self.multi_timeline_viewer.set_query_results(filtered_results)  
       
-    def on_interval_selected(self, interval, index: int):  
-        """区間が選択された時の処理（統合編集ウィジェット対応）"""  
-        # 統合編集ウィジェットに選択された区間を設定  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
-            self.integrated_edit_widget.set_selected_interval(interval, index)  
-          
-        # 動画をその位置にシーク  
-        self.video_controller.seek_to_time(interval.start_time)  
+    def on_interval_selected(self, interval, index: int):    
+        """区間が選択された時の処理（統合編集ウィジェット対応）"""    
+        # 統合編集ウィジェットに選択された区間を設定    
+        if hasattr(interval, 'query_result') and interval.query_result:    
+            self.integrated_edit_widget.set_current_query_results(interval.query_result)    
+            self.integrated_edit_widget.set_selected_interval(interval, index)    
+        
+        # Timeline上で区間をハイライト
+        self.highlight_interval_on_timeline(interval)  
+            
+        # 動画をその位置にシーク    
+        self.video_controller.seek_to_time(interval.start_time)
       
     def on_results_updated(self, results):  
         """結果が更新された時の処理（Hand Type Filter対応）"""  
@@ -357,7 +361,12 @@ class MainApplicationWindow(QMainWindow):
                 self.integrated_edit_widget.set_selected_interval(interval, 0)  
           
         # Detection Resultsリストで該当する区間を選択  
-        self.results_manager.select_interval_in_list(interval, query_result)
+        self.results_manager.select_interval_in_list(interval)
+
+        # Timeline上で区間をハイライト
+        self.highlight_interval_on_timeline(interval) 
+        # Detection Resultsリストで該当する区間を選択
+        self.results_manager.select_interval_in_list(interval)  
 
         # 動画をその位置にシーク  
         self.video_controller.seek_to_time(interval.start_time)  
