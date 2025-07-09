@@ -31,7 +31,7 @@ class ResultsManager(QObject):
         print(f"DEBUG: After setting, self._results_list_widget: {self._results_list_widget}")           
 
         # 結果リストのクリックイベントを接続  
-        if self._results_list_widget:  
+        if self._results_list_widget is not None:  
             print("DEBUG: Connecting itemClicked signal")  
             self._results_list_widget.itemClicked.connect(self.on_result_item_clicked)  
             print("DEBUG: Signal connected successfully")  
@@ -111,10 +111,6 @@ class ResultsManager(QObject):
                         item.setData(1, {'type': 'interval', 'interval': interval, 'index': i})  
                         self._results_list_widget.addItem(item)  
                         total_items_added += 1  
-                        # 区間アイテムを実際に追加  
-                        item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
-                        item = QListWidgetItem(item_text)  
-                        item.setData(1, {'type': 'interval', 'interval': interval, 'index': i})  
                         
                         # アイテムの状態をデバッグ  
                         print(f"DEBUG: Adding item: {item_text}")  
