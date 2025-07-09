@@ -96,7 +96,8 @@ class ResultsManager(QObject):
                 for i, interval in enumerate(result.relevant_windows):  
                     if interval.confidence_score >= self.confidence_threshold:  
                         print(f"DEBUG: Adding interval {i} for query '{result.query_text}'")  
-                        
+                        # アイテム追加...  
+                        total_items_added += 1  
                         # 区間アイテムを実際に追加  
                         item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
                         item = QListWidgetItem(item_text)  
