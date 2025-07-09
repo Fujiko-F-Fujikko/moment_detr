@@ -84,25 +84,25 @@ class ResultsManager(QObject):
       
     def update_results_display(self):  
         """結果表示を更新"""  
-        print(f"DEBUG: update_results_display called")  
+        #print(f"DEBUG: update_results_display called")  
         
         # より詳細なチェックを追加  
         if self._results_list_widget is None:  
             print("DEBUG: results_list_widget is None!")  
             return  
         
-        print(f"DEBUG: Clearing results list, current item count: {self._results_list_widget.count()}")  
+        #print(f"DEBUG: Clearing results list, current item count: {self._results_list_widget.count()}")  
         self._results_list_widget.clear()  
         
         grouped_results = self._group_results_by_hand_type(self.filtered_results)  
-        print(f"DEBUG: Grouped results: {[(k, len(v)) for k, v in grouped_results.items()]}")  
+        #print(f"DEBUG: Grouped results: {[(k, len(v)) for k, v in grouped_results.items()]}")  
         
         total_items_added = 0  
         for hand_type, results in grouped_results.items():  
             if not results:  
                 continue  
             
-            print(f"DEBUG: Adding header for {hand_type}")  
+            #print(f"DEBUG: Adding header for {hand_type}")  
             
             # ヘッダーアイテムを実際に追加  
             header_item = QListWidgetItem(f"=== {hand_type} ===")  
@@ -114,7 +114,7 @@ class ResultsManager(QObject):
             for result in results:  
                 for i, interval in enumerate(result.relevant_windows):  
                     if interval.confidence_score >= self.confidence_threshold:  
-                        print(f"DEBUG: Adding interval {i} for query '{result.query_text}'")  
+                        #print(f"DEBUG: Adding interval {i} for query '{result.query_text}'")  
                         
                         # 区間アイテムを実際に追加  
                         item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
@@ -123,14 +123,9 @@ class ResultsManager(QObject):
                         self._results_list_widget.addItem(item)  
                         total_items_added += 1  
                         
-                        # アイテムの状態をデバッグ  
-                        print(f"DEBUG: Adding item: {item_text}")  
-                        print(f"DEBUG: Item flags: {item.flags()}")  
-                        print(f"DEBUG: Item is selectable: {bool(item.flags() & Qt.ItemFlag.ItemIsSelectable)}")  
-                        
                         self._results_list_widget.addItem(item)
 
-        print(f"DEBUG: Total items added to list: {total_items_added}")
+        #print(f"DEBUG: Total items added to list: {total_items_added}")
       
     def _group_results_by_hand_type(self, results: List[QueryResults]) -> dict:  
         """結果をhand type毎にグループ化"""  

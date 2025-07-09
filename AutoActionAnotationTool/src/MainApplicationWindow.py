@@ -371,17 +371,20 @@ class MainApplicationWindow(QMainWindow):
         # 動画をその位置にシーク  
         self.video_controller.seek_to_time(interval.start_time)  
       
-    def update_confidence_filter(self, value: int):      
-        """信頼度フィルタを更新（Saliency Threshold削除対応）"""      
-        threshold = value / 100.0      
-        if hasattr(self, 'confidence_value_label'):  
-            self.confidence_value_label.setText(f"{threshold:.2f}")    
-        self.results_manager.set_confidence_threshold(threshold)  
-          
-        # Hand Type Filter Managerの結果を再適用  
-        filtered_results = self.hand_type_filter_manager.get_filtered_results()  
-        self.results_manager.update_filtered_results(filtered_results)
-
+    def update_confidence_filter(self, value: int):        
+        """信頼度フィルタを更新（Saliency Threshold削除対応）"""        
+        # 1. まずHand Type Filter Managerの結果を適用    
+        filtered_results = self.hand_type_filter_manager.get_filtered_results()    
+        self.results_manager.update_filtered_results(filtered_results)  
+        self.multi_timeline_viewer.set_query_results(filtered_results)
+ 
+        # 2. 次に信頼度フィルタを適用(Timelineインスタンスがが再生成されたあとに適用)
+        threshold = value / 100.0        
+        if hasattr(self, 'confidence_value_label'):    
+            self.confidence_value_label.setText(f"{threshold:.2f}")      
+        self.results_manager.set_confidence_threshold(threshold)    
+        self.multi_timeline_viewer.set_confidence_threshold(threshold)
+            
 def parse_arguments():    
     """コマンドライン引数を解析"""    
     parser = argparse.ArgumentParser(description='Moment-DETR Video Annotation Viewer')    

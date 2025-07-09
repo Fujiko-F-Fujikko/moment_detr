@@ -14,6 +14,7 @@ class TimelineViewer(QWidget):
         super().__init__()  
         self.video_duration = 0.0  
         self.current_position = 0.0  
+        self.confidence_threshold = 0.0
         self.intervals = []  
         self.saliency_scores = []  
         self.highlighted_interval = None
@@ -151,6 +152,11 @@ class TimelineViewer(QWidget):
     
     def draw_interval(self, painter: QPainter, rect: QRect, interval: DetectionInterval):    
         """Draw detection interval as colored bar"""    
+        # 信頼度が閾値未満の場合は描画しない
+        if interval.confidence_score < self.confidence_threshold:  
+            print(f"DEBUG: Skipping interval {interval.start_time}-{interval.end_time} due to low confidence ({interval.confidence_score})")
+            return  
+
         start_x = rect.width() * interval.start_time / self.video_duration    
         end_x = rect.width() * interval.end_time / self.video_duration    
         width = end_x - start_x    
@@ -174,3 +180,8 @@ class TimelineViewer(QWidget):
         # Draw border    
         painter.setPen(QPen(border_color, 2))    
         painter.drawRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20)
+
+    def set_confidence_threshold(self, threshold: float):  
+        """confidence閾値を設定し、表示を更新"""  
+        self.confidence_threshold = threshold  
+        self.update()  # 再描画をトリガー

@@ -2,7 +2,6 @@
 from PyQt6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel  
 from PyQt6.QtCore import pyqtSignal  
 from TimelineViewer import TimelineViewer  
-from DetectionInterval import DetectionInterval  
 from STTDataStructures import QueryParser, QueryValidationError  
   
 class MultiTimelineViewer(QWidget):    
@@ -138,3 +137,11 @@ class MultiTimelineViewer(QWidget):
             timeline = widget.findChild(TimelineViewer)  
             if timeline:  
                 timeline.update_playhead_position(position)
+
+    def set_confidence_threshold(self, threshold: float):  
+        """全てのタイムラインにconfidence閾値を設定"""  
+        self.confidence_threshold = threshold  
+        for widget in self.timeline_widgets:  
+            timeline = widget.findChild(TimelineViewer)  
+            if timeline is not None:
+                timeline.set_confidence_threshold(threshold)
