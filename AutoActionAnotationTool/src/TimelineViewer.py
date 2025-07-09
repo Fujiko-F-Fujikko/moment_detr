@@ -16,6 +16,7 @@ class TimelineViewer(QWidget):
         self.current_position = 0.0  
         self.intervals = []  
         self.saliency_scores = []  
+        self.highlighted_interval = None
         self.setMinimumHeight(100)  
         self.time_scale_enabled = False
           
@@ -158,3 +159,34 @@ class TimelineViewer(QWidget):
         """時間目盛り表示を有効/無効にする"""  
         self.time_scale_enabled = enabled  
         self.update()  # 再描画をトリガー
+
+    def set_highlighted_interval(self, interval):  
+        """ハイライトする区間を設定"""  
+        self.highlighted_interval = interval  
+        self.update()  # 再描画をトリガー  
+    
+    def draw_interval(self, painter: QPainter, rect: QRect, interval: DetectionInterval):    
+        """Draw detection interval as colored bar"""    
+        start_x = rect.width() * interval.start_time / self.video_duration    
+        end_x = rect.width() * interval.end_time / self.video_duration    
+        width = end_x - start_x    
+            
+        # ハイライト対象かどうかで色を変更  
+        if (self.highlighted_interval and   
+            interval.start_time == self.highlighted_interval.start_time and  
+            interval.end_time == self.highlighted_interval.end_time):  
+            # ハイライト色（黄色）  
+            alpha = int(interval.confidence_score * 255)  
+            color = QColor(255, 255, 0, alpha)  # 黄色でハイライト  
+            border_color = QColor(255, 200, 0)  
+        else:  
+            # 通常色（青色）  
+            alpha = int(interval.confidence_score * 255)    
+            color = QColor(0, 150, 255, alpha)  # Blue with varying transparency    
+            border_color = QColor(0, 100, 200)  
+            
+        painter.fillRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20, color)    
+            
+        # Draw border    
+        painter.setPen(QPen(border_color, 2))    
+        painter.drawRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20)

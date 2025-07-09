@@ -190,14 +190,24 @@ class MainApplicationWindow(QMainWindow):
           
     def on_interval_selected(self, interval, index: int):  
         """区間が選択された時の処理"""  
+        print(f"DEBUG: MainApp - on_interval_selected called with interval {interval.start_time}-{interval.end_time}")  
+        
         # 統合編集ウィジェットに選択された区間を設定  
         if hasattr(interval, 'query_result') and interval.query_result:  
+            print(f"DEBUG: MainApp - Setting query result: {interval.query_result.query_text}")  
             self.integrated_edit_widget.set_current_query_results(interval.query_result)  
             self.integrated_edit_widget.set_selected_interval(interval, index)  
-          
+        
         # 動画をその位置にシーク  
-        self.video_controller.seek_to_time(interval.start_time)  
-          
+        print(f"DEBUG: MainApp - Seeking to time: {interval.start_time}")  
+        self.video_controller.seek_to_time(interval.start_time)
+
+    def highlight_interval_on_timeline(self, interval, query_result):  
+        """タイムライン上で指定された区間をハイライト"""  
+        # MultiTimelineViewerに選択状態を通知  
+        if hasattr(self.multi_timeline_viewer, 'highlight_interval'):  
+            self.multi_timeline_viewer.highlight_interval(interval, query_result)
+
     def on_results_updated(self, results):  
         """結果が更新された時の処理"""  
         # Hand Type Filter Managerに結果を設定  
@@ -342,18 +352,26 @@ class MainApplicationWindow(QMainWindow):
             if duration_seconds > 0:    
                 self.multi_timeline_viewer.set_video_duration(duration_seconds)  
   
-    def on_timeline_interval_clicked(self, interval, query_result):    
-        """タイムライン上の区間がクリックされた時の処理"""    
+    def on_timeline_interval_clicked(self, interval, query_result):  
+        """タイムライン上の区間がクリックされた時の処理"""  
+        print(f"DEBUG: MainApp - Timeline interval clicked: {interval.start_time}-{interval.end_time}")  
+        print(f"DEBUG: MainApp - Query result: {query_result.query_text if hasattr(query_result, 'query_text') else 'No query_text'}")  
+        
         # 統合編集ウィジェットに選択された区間を設定  
         self.integrated_edit_widget.set_current_query_results(query_result)  
-          
+        
         # 区間のインデックスを特定  
         if hasattr(query_result, 'relevant_windows'):  
             try:  
                 index = query_result.relevant_windows.index(interval)  
+                print(f"DEBUG: MainApp - Found interval at index: {index}")  
                 self.integrated_edit_widget.set_selected_interval(interval, index)  
             except ValueError:  
+                print(f"DEBUG: MainApp - Interval not found in relevant_windows, using index 0")  
                 self.integrated_edit_widget.set_selected_interval(interval, 0)  
+        
+        # 動画をその位置にシーク  
+        self.video_controller.seek_to_time(interval.start_time)
 
     def setup_connections(self):    
         """シグナル・スロット接続の設定（第2段階）"""    

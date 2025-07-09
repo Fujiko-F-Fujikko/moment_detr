@@ -26,11 +26,30 @@ class ResultsManager(QObject):
         """UI要素を設定（hand type filter対応）"""  
         self._hand_type_combo_widget = hand_type_combo  
         self._results_list_widget = results_list  
-          
+        
+        print(f"DEBUG: set_ui_components - results_list: {results_list}")  
+        
         # 結果リストのクリックイベントを接続  
         if self._results_list_widget:  
+            print("DEBUG: Connecting itemClicked signal")  
             self._results_list_widget.itemClicked.connect(self.on_result_item_clicked)  
+            print("DEBUG: Signal connected successfully")  
+            # 追加：マウスプレスイベントも監視  
+            self._results_list_widget.mousePressEvent = self.debug_mouse_press 
+        else:  
+            print("DEBUG: results_list_widget is None, cannot connect signal")
       
+    def debug_mouse_press(self, event):  
+        """マウスプレスイベントのデバッグ"""  
+        print(f"DEBUG: Mouse press event on results list at position: {event.position()}")  
+        item = self._results_list_widget.itemAt(event.position().toPoint())  
+        if item:  
+            print(f"DEBUG: Clicked item: {item.text()}")  
+        else:  
+            print("DEBUG: No item at click position")  
+        # 元のイベント処理を呼び出し  
+        QListWidget.mousePressEvent(self._results_list_widget, event)
+
     def load_inference_results(self, json_path: str):  
         """推論結果を読み込み"""  
         try:  
@@ -77,9 +96,19 @@ class ResultsManager(QObject):
                 for i, interval in enumerate(result.relevant_windows):  
                     if interval.confidence_score >= self.confidence_threshold:  
                         print(f"DEBUG: Adding interval {i} for query '{result.query_text}'")  
-                        # アイテム追加...  
-                        total_items_added += 1  
-        
+                        
+                        # 区間アイテムを実際に追加  
+                        item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
+                        item = QListWidgetItem(item_text)  
+                        item.setData(1, {'type': 'interval', 'interval': interval, 'index': i})  
+                        
+                        # アイテムの状態をデバッグ  
+                        print(f"DEBUG: Adding item: {item_text}")  
+                        print(f"DEBUG: Item flags: {item.flags()}")  
+                        print(f"DEBUG: Item is selectable: {bool(item.flags() & Qt.ItemFlag.ItemIsSelectable)}")  
+                        
+                        self._results_list_widget.addItem(item)
+
         print(f"DEBUG: Total items added to list: {total_items_added}")
       
     def _group_results_by_hand_type(self, results: List[QueryResults]) -> dict:  
@@ -109,12 +138,32 @@ class ResultsManager(QObject):
       
     def on_result_item_clicked(self, item: QListWidgetItem):  
         """結果アイテムがクリックされた時の処理"""  
+        print(f"DEBUG: ResultsManager - Item clicked: {item.text()}")  
         data = item.data(1)  
         if data and data.get('type') == 'interval':  
             interval = data['interval']  
             index = data['index']  
-            self.intervalSelected.emit(interval, index)  
+            print(f"DEBUG: ResultsManager - Emitting intervalSelected for interval {interval.start_time}-{interval.end_time}")  
+            self.intervalSelected.emit(interval, index)
+
+    def select_interval_in_list(self, target_interval, query_result):  
+        """Detection Resultsリストで指定された区間を選択"""  
+        print(f"DEBUG: ResultsManager - select_interval_in_list called for {target_interval.start_time}-{target_interval.end_time}")  
+        
+        for i in range(self._results_list_widget.count()):  
+            item = self._results_list_widget.item(i)  
+            data = item.data(1)  
+            if data and data.get('type') == 'interval':  
+                interval = data['interval']  
+                if (interval.start_time == target_interval.start_time and   
+                    interval.end_time == target_interval.end_time):  
+                    print(f"DEBUG: ResultsManager - Found matching interval, selecting item {i}")  
+                    self._results_list_widget.setCurrentItem(item)  
+                    self._results_list_widget.scrollToItem(item)  
+                    return  
       
+    print(f"DEBUG: ResultsManager - No matching interval found in list")
+
     def set_confidence_threshold(self, threshold: float):  
         """信頼度閾値を設定"""  
         self.confidence_threshold = threshold  

@@ -104,13 +104,16 @@ class MultiTimelineViewer(QWidget):
   
     def on_interval_clicked_with_embedded_query(self, interval):  
         """区間がクリックされた時の処理（埋め込まれたクエリ情報を使用）"""  
+        print(f"DEBUG: MultiTimelineViewer - Interval clicked: {interval.start_time}-{interval.end_time}")  
+        
         # 区間に埋め込まれたクエリ情報を直接取得  
         if hasattr(interval, 'query_result') and interval.query_result:  
             query_result = interval.query_result  
+            print(f"DEBUG: MultiTimelineViewer - Found embedded query: {query_result.query_text}")  
             # メインウィンドウに通知  
             self.intervalClicked.emit(interval, query_result)  
         else:  
-            print(f"Warning: No query information found for interval {interval}")  
+            print(f"DEBUG: MultiTimelineViewer - No query information found for interval {interval}")
   
     def clear_timelines(self):  
         """既存のタイムラインをクリア"""  
