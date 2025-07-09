@@ -109,36 +109,39 @@ class MainApplicationWindow(QMainWindow):
         # Hand Type Filter Managerとの接続  
         self.hand_type_filter_manager.filterChanged.connect(self.on_hand_type_filter_changed)  
             
-    def setup_connections(self):    
-        """シグナル・スロット接続の設定"""    
+    def setup_connections(self):  
+        """シグナル・スロット接続の設定"""  
         # 動画プレイヤーコントローラーの接続  
         self.video_controller.positionChanged.connect(self.on_video_position_changed)  
         self.video_controller.durationChanged.connect(self.on_video_duration_changed)  
-          
+    
+        # Hand Type Filter Managerの接続  
+        self.hand_type_filter_manager.filterChanged.connect(self.on_hand_type_filter_changed)  
+    
         # 結果管理の接続（hand type filter対応）  
         self.results_manager.intervalSelected.connect(self.on_interval_selected)  
         self.results_manager.resultsUpdated.connect(self.on_results_updated)  
-          
+    
         # 統合編集ウィジェットの接続  
         self.integrated_edit_widget.intervalUpdated.connect(self.on_interval_updated)  
         self.integrated_edit_widget.intervalDeleted.connect(self.on_interval_deleted)  
         self.integrated_edit_widget.intervalAdded.connect(self.on_interval_added)  
         self.integrated_edit_widget.dataChanged.connect(self.on_stt_data_changed)  
-          
+    
         # ファイル管理の接続  
         self.file_manager.videoLoaded.connect(self.load_video_from_path)  
         self.file_manager.resultsLoaded.connect(self.load_inference_results_from_path)  
         self.file_manager.resultsSaved.connect(self.on_results_saved)  
-            
+    
         # 信頼度フィルタ接続（Saliency Threshold削除）  
         if hasattr(self, 'confidence_slider'):  
             self.confidence_slider.valueChanged.connect(self.update_confidence_filter)  
             self.confidence_slider.valueChanged.connect(  
                 lambda v: self.filter_controller.set_confidence_threshold(v / 100.0)  
             )  
-  
-        # 複数タイムラインからの区間クリックを接続    
-        self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)  
+    
+        # 複数タイムラインからの区間クリックを接続  
+        self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)
   
     def setup_menus(self):    
         """メニューバーの設定"""    
@@ -181,46 +184,12 @@ class MainApplicationWindow(QMainWindow):
             self.multi_timeline_viewer.set_video_duration(duration_seconds)  
             if self.results_manager.get_all_results():  
                 self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())  
-      
-    def on_hand_type_filter_changed(self):  
-        """Hand Typeフィルタが変更された時の処理"""  
-        filtered_results = self.hand_type_filter_manager.get_filtered_results()  
-        self.results_manager.update_filtered_results(filtered_results)  
-        self.multi_timeline_viewer.set_query_results(filtered_results)  
-          
-    def on_interval_selected(self, interval, index: int):  
-        """区間が選択された時の処理"""  
-        print(f"DEBUG: MainApp - on_interval_selected called with interval {interval.start_time}-{interval.end_time}")  
-        
-        # 統合編集ウィジェットに選択された区間を設定  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            print(f"DEBUG: MainApp - Setting query result: {interval.query_result.query_text}")  
-            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
-            self.integrated_edit_widget.set_selected_interval(interval, index)  
-        
-        # 動画をその位置にシーク  
-        print(f"DEBUG: MainApp - Seeking to time: {interval.start_time}")  
-        self.video_controller.seek_to_time(interval.start_time)
-
+                
     def highlight_interval_on_timeline(self, interval, query_result):  
         """タイムライン上で指定された区間をハイライト"""  
         # MultiTimelineViewerに選択状態を通知  
         if hasattr(self.multi_timeline_viewer, 'highlight_interval'):  
             self.multi_timeline_viewer.highlight_interval(interval, query_result)
-
-    def on_results_updated(self, results):  
-        """結果が更新された時の処理"""  
-        # Hand Type Filter Managerに結果を設定  
-        self.hand_type_filter_manager.set_results(results)  
-          
-        # タイムラインビューアを更新  
-        self.multi_timeline_viewer.set_query_results(results)  
-          
-        # STTデータマネージャーに推論結果を追加  
-        if self.app_controller.video_info:  
-            video_name = Path(self.app_controller.video_info.video_path).stem  
-            self.stt_data_manager.add_inference_results(video_name, results)  
-            self.integrated_edit_widget.set_current_video(video_name)  
           
     def on_interval_updated(self):  
         """区間が更新された時の処理"""  
@@ -323,15 +292,7 @@ class MainApplicationWindow(QMainWindow):
                 self.multi_timeline_viewer.set_video_duration(duration_seconds)      
         except Exception as e:      
             self.file_manager.show_load_error_message(str(e), self)  
-  
-    def update_confidence_filter(self, value: int):      
-        """信頼度フィルタを更新"""      
-        threshold = value / 100.0      
-        if hasattr(self, 'confidence_value_label'):  
-            self.confidence_value_label.setText(f"{threshold:.2f}")    
-        self.results_manager.set_confidence_threshold(threshold)  
-        self.apply_filters()  
-  
+    
     def apply_filters(self):    
         """フィルタを適用して表示を更新"""    
         if not self.results_manager.get_all_results():    
@@ -351,61 +312,6 @@ class MainApplicationWindow(QMainWindow):
             duration_seconds = self.video_controller.get_duration_seconds()  
             if duration_seconds > 0:    
                 self.multi_timeline_viewer.set_video_duration(duration_seconds)  
-  
-    def on_timeline_interval_clicked(self, interval, query_result):  
-        """タイムライン上の区間がクリックされた時の処理"""  
-        print(f"DEBUG: MainApp - Timeline interval clicked: {interval.start_time}-{interval.end_time}")  
-        print(f"DEBUG: MainApp - Query result: {query_result.query_text if hasattr(query_result, 'query_text') else 'No query_text'}")  
-        
-        # 統合編集ウィジェットに選択された区間を設定  
-        self.integrated_edit_widget.set_current_query_results(query_result)  
-        
-        # 区間のインデックスを特定  
-        if hasattr(query_result, 'relevant_windows'):  
-            try:  
-                index = query_result.relevant_windows.index(interval)  
-                print(f"DEBUG: MainApp - Found interval at index: {index}")  
-                self.integrated_edit_widget.set_selected_interval(interval, index)  
-            except ValueError:  
-                print(f"DEBUG: MainApp - Interval not found in relevant_windows, using index 0")  
-                self.integrated_edit_widget.set_selected_interval(interval, 0)  
-        
-        # 動画をその位置にシーク  
-        self.video_controller.seek_to_time(interval.start_time)
-
-    def setup_connections(self):    
-        """シグナル・スロット接続の設定（第2段階）"""    
-        # 動画プレイヤーコントローラーの接続  
-        self.video_controller.positionChanged.connect(self.on_video_position_changed)  
-        self.video_controller.durationChanged.connect(self.on_video_duration_changed)  
-          
-        # Hand Type Filter Managerの接続  
-        self.hand_type_filter_manager.filterChanged.connect(self.on_hand_type_filter_changed)  
-          
-        # 結果管理の接続（hand type filter対応）  
-        self.results_manager.intervalSelected.connect(self.on_interval_selected)  
-        self.results_manager.resultsUpdated.connect(self.on_results_updated)  
-          
-        # 統合編集ウィジェットの接続  
-        self.integrated_edit_widget.intervalUpdated.connect(self.on_interval_updated)  
-        self.integrated_edit_widget.intervalDeleted.connect(self.on_interval_deleted)  
-        self.integrated_edit_widget.intervalAdded.connect(self.on_interval_added)  
-        self.integrated_edit_widget.dataChanged.connect(self.on_stt_data_changed)  
-          
-        # ファイル管理の接続  
-        self.file_manager.videoLoaded.connect(self.load_video_from_path)  
-        self.file_manager.resultsLoaded.connect(self.load_inference_results_from_path)  
-        self.file_manager.resultsSaved.connect(self.on_results_saved)  
-            
-        # 信頼度フィルタ接続（Saliency Threshold削除）  
-        if hasattr(self, 'confidence_slider'):  
-            self.confidence_slider.valueChanged.connect(self.update_confidence_filter)  
-            self.confidence_slider.valueChanged.connect(  
-                lambda v: self.filter_controller.set_confidence_threshold(v / 100.0)  
-            )  
-  
-        # 複数タイムラインからの区間クリックを接続    
-        self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)  
       
     def on_hand_type_filter_changed(self):  
         """Hand Typeフィルタが変更された時の処理"""  
@@ -450,6 +356,9 @@ class MainApplicationWindow(QMainWindow):
             except ValueError:  
                 self.integrated_edit_widget.set_selected_interval(interval, 0)  
           
+        # Detection Resultsリストで該当する区間を選択  
+        self.results_manager.select_interval_in_list(interval, query_result)
+
         # 動画をその位置にシーク  
         self.video_controller.seek_to_time(interval.start_time)  
       

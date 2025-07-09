@@ -73,23 +73,7 @@ class TimelineViewer(QWidget):
               
             color = QColor(255, int(255 * (1 - normalized_score)), 0, alpha)  # Red to yellow  
             painter.fillRect(int(x), rect.top(), int(clip_width), rect.height(), color)  
-      
-    def draw_interval(self, painter: QPainter, rect: QRect, interval: DetectionInterval):  
-        """Draw detection interval as colored bar"""  
-        start_x = rect.width() * interval.start_time / self.video_duration  
-        end_x = rect.width() * interval.end_time / self.video_duration  
-        width = end_x - start_x  
-          
-        # Color based on confidence  
-        alpha = int(interval.confidence_score * 255)  
-        color = QColor(0, 150, 255, alpha)  # Blue with varying transparency  
-          
-        painter.fillRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20, color)  
-          
-        # Draw border  
-        painter.setPen(QPen(QColor(0, 100, 200), 2))  
-        painter.drawRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20)  
-      
+            
     def mousePressEvent(self, event):  
         if self.video_duration <= 0:  
             return  
