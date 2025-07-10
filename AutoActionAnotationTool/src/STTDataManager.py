@@ -32,6 +32,10 @@ class STTDataManager:
         invalid_queries = []  
         
         for query_result in inference_results:  
+            # ステップクエリの場合は検証をスキップ  
+            if query_result.query_text.startswith("Step:"):  
+                continue  
+
             try:  
                 # 新しい検証付きパーサーを使用  
                 hand_type_raw, action_data = QueryParser.validate_and_parse_query(query_result.query_text)  

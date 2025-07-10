@@ -406,7 +406,10 @@ class MainApplicationWindow(QMainWindow):
                 self.integrated_edit_widget.set_selected_interval(interval, index)  
             except ValueError:  
                 self.integrated_edit_widget.set_selected_interval(interval, 0)  
-          
+
+        # 適切なタブに自動切り替え（ステップ選択も含む） 
+        self.integrated_edit_widget.switch_to_appropriate_tab(interval)            
+
         # Detection Resultsリストで該当する区間を選択  
         self.results_manager.select_interval_in_list(interval)
 

@@ -479,3 +479,38 @@ class IntegratedEditWidget(QWidget):
         if main_window:  
             command = StepDeleteCommand(self.stt_data_manager, self.current_video_name, index, main_window)  
             main_window.undo_stack.push(command)
+
+    def switch_to_appropriate_tab(self, interval):  
+        """区間の種類に応じて適切なタブに切り替える"""  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            query_text = interval.query_result.query_text  
+            
+            # Stepの区間かどうかを判定  
+            if query_text.startswith("Step:"):  
+                # Step Editタブに切り替え  
+                self.tab_widget.setCurrentIndex(1)  # Step Editタブのインデックス  
+                # クリックされたステップを選択状態にする  
+                self._select_step_by_label(interval.label)  
+            else:  
+                # Action Editタブに切り替え  
+                self.tab_widget.setCurrentIndex(0)  # Action Editタブのインデックス
+
+    def _select_step_by_label(self, step_label):  
+        """ステップラベルに基づいてステップリストで該当項目を選択"""  
+        if not step_label or not self.step_list:  
+            return  
+        
+        # ステップリストから該当するアイテムを検索  
+        for i in range(self.step_list.count()):  
+            item = self.step_list.item(i)  
+            if item.text() == step_label:  
+                # アイテムを選択状態にする  
+                self.step_list.setCurrentItem(item)  
+                item.setSelected(True)  
+                
+                # スクロールして表示  
+                self.step_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
+                
+                # 編集フィールドに値を設定  
+                self.on_step_selected(item)  
+                break
