@@ -15,6 +15,9 @@ class TimelineViewer(QWidget):
     intervalDragFinished = pyqtSignal(DetectionInterval, float, float)       
     def __init__(self):  
         super().__init__()  
+        # マウストラッキングを有効にする  
+        self.setMouseTracking(True)  
+
         self.video_duration = 0.0  
         self.current_position = 0.0  
         self.confidence_threshold = 0.0
@@ -172,13 +175,27 @@ class TimelineViewer(QWidget):
         return True  # 重複なし  
 
     def mouseMoveEvent(self, event):  
-        if not self.is_dragging or not self.dragging_interval:  
-            # ドラッグ中でない場合はカーソル形状を更新  
+        # ホバー中の処理
+        if not self.is_dragging:  
+            # 現在ホバーしている区間を特定  
+            current_hovered_interval = self.get_interval_at_position(event.position())  
+            
+            # 前回ホバーしていた区間と比較  
+            if current_hovered_interval != getattr(self, 'last_hovered_interval', None):  
+                # leaveEvent相当の処理  
+                if hasattr(self, 'last_hovered_interval') and self.last_hovered_interval:  
+                    self.on_interval_leave(self.last_hovered_interval)  
+                
+                # enterEvent相当の処理  
+                if current_hovered_interval:  
+                    self.on_interval_enter(current_hovered_interval)  
+                
+                self.last_hovered_interval = current_hovered_interval  
+            
             self.updateCursorForPosition(event.position())  
             return  
               
         # ドラッグ中の処理
-        print(f"DEBUG: Mouse moved - video_duration: {self.video_duration}")  
         current_time = max(0, min(self.video_duration,   
                                 (event.position().x() / self.width()) * self.video_duration))            
 
@@ -377,3 +394,31 @@ class TimelineViewer(QWidget):
         """confidence閾値を設定し、表示を更新"""  
         self.confidence_threshold = threshold  
         self.update()  # 再描画をトリガー
+
+    def get_interval_at_position(self, pos):  
+        """指定位置にある区間を取得"""  
+        if self.video_duration <= 0:  
+            return None  
+        
+        click_time = (pos.x() / self.width()) * self.video_duration  
+        
+        for interval in self.intervals:  
+            if (interval.confidence_score >= self.confidence_threshold and  
+                interval.start_time <= click_time <= interval.end_time):  
+                return interval  
+        return None
+
+    def on_interval_enter(self, interval):  
+        """区間にマウスが入った時の処理"""  
+        print(f"Entered interval: {interval.start_time}-{interval.end_time}")  
+        # 区間のハイライト表示  
+        self.highlighted_interval = interval  
+        self.update()  
+    
+    def on_interval_leave(self, interval):  
+        """区間からマウスが出た時の処理"""  
+        print(f"Left interval: {interval.start_time}-{interval.end_time}")  
+        # ハイライト解除  
+        if self.highlighted_interval == interval:  
+            self.highlighted_interval = None  
+            self.update()
