@@ -1,22 +1,20 @@
 # MainApplicationWindow.py (修正版)  
 import sys  
-import os  
 import argparse  
 from pathlib import Path  
   
 from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox, QDialog
-from PyQt6.QtGui import QAction  
-from PyQt6.QtCore import pyqtSlot  
+from PyQt6.QtGui import QAction, QUndoStack, QAction, QKeySequence
   
 from MultiTimelineViewer import MultiTimelineViewer  
 from ApplicationController import ApplicationController, FilterController  
-  
-# 新しく分離したクラスをインポート  
 from VideoPlayerController import VideoPlayerController  
 from ResultsManager import ResultsManager  
 from FileManager import FileManager  
 from UILayoutManager import UILayoutManager  
 from TimelineViewer import TimelineViewer
+from UndoCommand import IntervalModifyCommand
+from StepModifyCommand import StepModifyCommand
   
 # STT関連の新しいクラスをインポート  
 from STTDataManager import STTDataManager  
@@ -26,7 +24,10 @@ class MainApplicationWindow(QMainWindow):
         super().__init__()  
         self.setWindowTitle("Moment-DETR Video Annotation Viewer")  
         self.setGeometry(100, 100, 1600, 1000)  
-          
+
+        # Undo/Redoスタックを初期化  
+        self.undo_stack = QUndoStack(self)
+
         # コントローラーを初期化  
         self.video_controller = VideoPlayerController()  
         self.results_manager = ResultsManager()  
@@ -153,7 +154,7 @@ class MainApplicationWindow(QMainWindow):
     def setup_menus(self):    
         """メニューバーの設定"""    
         menubar = self.menuBar()    
-            
+
         # ファイルメニュー    
         file_menu = menubar.addMenu('File')    
             
@@ -166,17 +167,31 @@ class MainApplicationWindow(QMainWindow):
         file_menu.addAction(load_results_action)    
             
         file_menu.addSeparator()    
-            
+
+        export_stt_action = QAction('Export STT Dataset', self)  
+        export_stt_action.triggered.connect(self.export_stt_dataset)            
         save_results_action = QAction('Save Results', self)    
         save_results_action.triggered.connect(self.save_results)    
+  
+
+        file_menu.addAction(export_stt_action)  
         file_menu.addAction(save_results_action)  
           
-        # STTメニュー  
-        stt_menu = menubar.addMenu('STT Dataset')  
+        # Editメニュー
+        edit_menu = menubar.addMenu('Edit')  
+        
+        # Undoアクション  
+        undo_action = self.undo_stack.createUndoAction(self, "Undo")  
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z  
+        edit_menu.addAction(undo_action)  
+        
+        # Redoアクション    
+        redo_action = self.undo_stack.createRedoAction(self, "Redo")  
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Y  
+        edit_menu.addAction(redo_action)  
+        
+        edit_menu.addSeparator()  
           
-        export_stt_action = QAction('Export STT Dataset', self)  
-        export_stt_action.triggered.connect(self.export_stt_dataset)  
-        stt_menu.addAction(export_stt_action)  
           
     # 新しいイベントハンドラー  
     def on_video_position_changed(self, position: int):  
@@ -442,8 +457,12 @@ class MainApplicationWindow(QMainWindow):
     def on_interval_drag_started(self, interval):  
         """ドラッグ開始時の処理"""  
         print(f"DEBUG: MainApp - Drag started for interval {interval.start_time}-{interval.end_time}")  
-        # 必要に応じて他のUIコンポーネントを無効化  
-    
+        
+        # Store original values for undo functionality  
+        self.drag_original_start = interval.start_time  
+        self.drag_original_end = interval.end_time  
+        self.dragging_interval = interval
+
     def on_interval_drag_moved(self, interval, new_start, new_end):  
         """ドラッグ中の処理"""  
         # リアルタイムでIntegratedEditWidgetのスピンボックスを更新  
@@ -455,70 +474,33 @@ class MainApplicationWindow(QMainWindow):
             except ValueError:  
                 pass  
   
-    def on_interval_drag_finished(self, interval, new_start, new_end):    
-        """ドラッグ完了時の処理"""    
-        print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")    
+    def on_interval_drag_finished(self, interval, new_start, new_end):  
+        """ドラッグ完了時の処理"""  
+        print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  
         
-        # 現在の動画再生位置を保存  
-        current_position = self.video_controller.get_position_seconds()  
+        # Use the stored original values instead of current values  
+        old_start = getattr(self, 'drag_original_start', interval.start_time)  
+        old_end = getattr(self, 'drag_original_end', interval.end_time)  
         
-        # データを永続化    
-        interval.start_time = new_start    
-        interval.end_time = new_end    
+        print(f"DEBUG: Using original values: {old_start}-{old_end} -> {new_start}-{new_end}")  
         
-        # Stepsの区間かどうかを判定  
+        # Rest of the existing code...  
         if (hasattr(interval, 'query_result') and   
             hasattr(interval.query_result, 'query_text') and   
             interval.query_result.query_text.startswith("Step:")):  
             
-            # Stepsの場合：STTデータマネージャーでStepデータを更新  
-            video_name = self.get_current_video_name()  
-            if video_name and video_name in self.stt_data_manager.stt_dataset.database:  
-                video_data = self.stt_data_manager.stt_dataset.database[video_name]  
-                
-                # 該当するStepを見つけて更新  
-                step_text = interval.label or interval.query_result.query_text.replace("Step: ", "")  
-                updated_step_index = None  
-                
-                for i, step in enumerate(video_data.steps):  
-                    if step.step == step_text:  
-                        step.segment = [new_start, new_end]  
-                        fps = video_data.fps  
-                        step.segment_frames = [int(new_start * fps), int(new_end * fps)]  
-                        updated_step_index = i  
-                        break  
-                
-                # IntegratedEditWidgetのStep editタブのUIを更新  
-                self.integrated_edit_widget.refresh_step_list()  
-                
-                # 更新されたステップを再選択してUIを更新  
-                if updated_step_index is not None:  
-                    step_list = self.integrated_edit_widget.step_list  
-                    if updated_step_index < step_list.count():  
-                        item = step_list.item(updated_step_index)  
-                        step_list.setCurrentItem(item)  
-                        # on_step_selectedを手動で呼び出してUIを更新  
-                        self.integrated_edit_widget.on_step_selected(item)  
+            command = StepModifyCommand(interval, old_start, old_end, new_start, new_end,   
+                                    self.stt_data_manager, self.get_current_video_name(), self)  
+            self.undo_stack.push(command)  
         else:  
-            # 通常の推論結果の場合：既存の処理  
-            if hasattr(interval, 'query_result') and interval.query_result:    
-                self.integrated_edit_widget.set_current_query_results(interval.query_result)    
-                try:    
-                    index = interval.query_result.relevant_windows.index(interval)    
-                    self.integrated_edit_widget.set_selected_interval(interval, index)    
-                except ValueError:    
-                    pass    
+            command = IntervalModifyCommand(interval, old_start, old_end, new_start, new_end, self)  
+            self.undo_stack.push(command)  
         
-        # Detection Resultsリストを更新    
-        self.results_manager.update_results_display()    
-        
-        # 変更をシグナルで通知    
-        self.integrated_edit_widget.intervalUpdated.emit()  
-        
-        # 再生位置を復元  
-        if current_position > 0:  
-            self.multi_timeline_viewer.update_playhead_position(current_position)
-
+        # Clean up stored values  
+        self.drag_original_start = None  
+        self.drag_original_end = None  
+        self.dragging_interval = None
+            
 def parse_arguments():    
     """コマンドライン引数を解析"""    
     parser = argparse.ArgumentParser(description='Moment-DETR Video Annotation Viewer')    

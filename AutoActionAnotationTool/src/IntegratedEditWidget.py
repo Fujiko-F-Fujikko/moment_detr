@@ -4,7 +4,9 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                             QListWidget, QListWidgetItem, QDoubleSpinBox,  
                             QTabWidget, QMessageBox)  
 from PyQt6.QtCore import pyqtSignal  
+
 from Results import QueryResults, DetectionInterval  
+from UndoCommand import IntervalModifyCommand
   
 class IntegratedEditWidget(QWidget):  
     dataChanged = pyqtSignal()  
@@ -240,6 +242,17 @@ class IntegratedEditWidget(QWidget):
         if not self.selected_interval or not self.current_query_result:  
             return  
           
+        old_start = self.selected_interval.start_time  
+        old_end = self.selected_interval.end_time  
+        new_start = self.start_spinbox.value()    
+        new_end = self.end_spinbox.value()  
+        
+        # MainApplicationWindowのundo_stackにアクセス  
+        main_window = self.get_main_window()  
+        if main_window:  
+            command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end)  
+            main_window.undo_stack.push(command)  
+
         # 区間の時間を更新  
         self.selected_interval.start_time = self.start_spinbox.value()  
         self.selected_interval.end_time = self.end_spinbox.value()  
@@ -385,3 +398,13 @@ class IntegratedEditWidget(QWidget):
           
         self.refresh_step_list()  
         self.dataChanged.emit()
+
+    def get_main_window(self):  
+        """MainApplicationWindowを取得"""  
+        parent = self.parent()  
+        while parent:  
+            # 文字列ベースの型チェックに変更  
+            if parent.__class__.__name__ == 'MainApplicationWindow':  
+                return parent  
+            parent = parent.parent()  
+        return None

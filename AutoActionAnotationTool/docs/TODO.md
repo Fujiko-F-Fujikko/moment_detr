@@ -5,3 +5,4 @@
     - [x]  StepsもTimelineViewerに表示する（一番上の段）
     - [x]  新しいIntervalを追加するときに元のに被らないようにする
     - [ ]  Undo/Redo
+    - [ ]  キーボードショートカット

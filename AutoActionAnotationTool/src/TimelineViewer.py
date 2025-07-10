@@ -36,7 +36,6 @@ class TimelineViewer(QWidget):
         self.resize_edge_threshold = 10  # ピクセル単位でのリサイズエッジの幅  
 
     def set_video_duration(self, duration: float):  
-        print(f"DEBUG: Setting video duration to {duration}")
         self.video_duration = duration  
         self.update()  
       
@@ -410,14 +409,14 @@ class TimelineViewer(QWidget):
 
     def on_interval_enter(self, interval):  
         """区間にマウスが入った時の処理"""  
-        print(f"Entered interval: {interval.start_time}-{interval.end_time}")  
+        #print(f"Entered interval: {interval.start_time}-{interval.end_time}")  
         # 区間のハイライト表示  
         self.highlighted_interval = interval  
         self.update()  
     
     def on_interval_leave(self, interval):  
         """区間からマウスが出た時の処理"""  
-        print(f"Left interval: {interval.start_time}-{interval.end_time}")  
+        #print(f"Left interval: {interval.start_time}-{interval.end_time}")  
         # ハイライト解除  
         if self.highlighted_interval == interval:  
             self.highlighted_interval = None  
