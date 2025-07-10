@@ -6,7 +6,10 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import pyqtSignal  
 
 from Results import QueryResults, DetectionInterval  
-from UndoCommand import IntervalModifyCommand
+from TimelineViewer import TimelineViewer
+from UndoCommand import IntervalModifyCommand, IntervalDeleteCommand, IntervalAddCommand
+from StepModifyCommand import StepModifyCommand, StepDeleteCommand, StepAddCommand, StepTextModifyCommand
+
   
 class IntegratedEditWidget(QWidget):  
     dataChanged = pyqtSignal()  
@@ -14,13 +17,15 @@ class IntegratedEditWidget(QWidget):
     intervalDeleted = pyqtSignal()  
     intervalAdded = pyqtSignal()  
       
-    def __init__(self):  
+    def __init__(self, main_window=None):  
         super().__init__()  
         self.current_query_result = None  
         self.selected_interval = None  
         self.selected_interval_index = -1  
         self.stt_data_manager = None  
         self.current_video_name = None  
+        self.main_window = main_window
+        print("IntegratedEditWidget initialized. main_window:", main_window)
         self.setup_ui()  
       
     def setup_ui(self):  
@@ -241,41 +246,34 @@ class IntegratedEditWidget(QWidget):
         """区間変更を適用"""  
         if not self.selected_interval or not self.current_query_result:  
             return  
-          
+        
         old_start = self.selected_interval.start_time  
         old_end = self.selected_interval.end_time  
-        new_start = self.start_spinbox.value()    
+        new_start = self.start_spinbox.value()  
         new_end = self.end_spinbox.value()  
         
         # MainApplicationWindowのundo_stackにアクセス  
-        main_window = self.get_main_window()  
+        main_window = self.main_window  
         if main_window:  
-            command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end)  
+            command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end, main_window)  
             main_window.undo_stack.push(command)  
-
-        # 区間の時間を更新  
-        self.selected_interval.start_time = self.start_spinbox.value()  
-        self.selected_interval.end_time = self.end_spinbox.value()  
-          
-        self.intervalUpdated.emit()  
-        self.dataChanged.emit()  
-
+    
     def delete_interval(self):  
         """区間を削除"""  
         if not self.selected_interval or not self.current_query_result:  
             return  
-          
-        # 区間を削除  
-        if self.selected_interval in self.current_query_result.relevant_windows:  
-            self.current_query_result.relevant_windows.remove(self.selected_interval)  
-          
-        self.clear_selection()  
-        self.intervalDeleted.emit()  
-        self.dataChanged.emit()  
-      
-    def add_new_interval(self):    
-        """新しい区間を追加（選択中の区間の右横に配置）"""    
-        if not self.current_query_result:    
+        
+        # 区間のインデックスを取得  
+        index = self.current_query_result.relevant_windows.index(self.selected_interval)  
+        
+        main_window = self.main_window  
+        if main_window:  
+            command = IntervalDeleteCommand(self.current_query_result, self.selected_interval, index, main_window)  
+            main_window.undo_stack.push(command)  
+    
+    def add_new_interval(self):  
+        """新しい区間を追加"""  
+        if not self.current_query_result:  
             return    
             
         if not self.start_spinbox or not self.end_spinbox:    
@@ -313,20 +311,15 @@ class IntegratedEditWidget(QWidget):
         if start_time >= end_time:  
             QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")  
             return  
-            
+        
         # 新しい区間を作成  
-        from DetectionInterval import DetectionInterval    
-        new_interval = DetectionInterval(start_time, end_time, 1.0, len(self.current_query_result.relevant_windows))    
-        new_interval.query_result = self.current_query_result    
-            
-        self.current_query_result.relevant_windows.append(new_interval)  
+        new_interval = DetectionInterval(start_time, end_time, 1.0, len(self.current_query_result.relevant_windows))  
+        new_interval.query_result = self.current_query_result  
         
-        # UIを更新して新しい区間を選択状態にする  
-        self.start_spinbox.setValue(start_time)  
-        self.end_spinbox.setValue(end_time)  
-        
-        self.intervalAdded.emit()    
-        self.dataChanged.emit()
+        main_window = self.main_window  
+        if main_window:  
+            command = IntervalAddCommand(self.current_query_result, new_interval, main_window)  
+            main_window.undo_stack.push(command)  
       
     def refresh_step_list(self):  
         """ステップリストを更新"""  
@@ -360,51 +353,57 @@ class IntegratedEditWidget(QWidget):
         step_text = self.step_text_edit.text().strip()  
         if not step_text or not self.stt_data_manager or not self.current_video_name:  
             return  
-          
+        
         segment = [0.0, 1.0]  
-        self.stt_data_manager.add_step(self.current_video_name, step_text, segment)  
-          
-        self.step_text_edit.clear()  
-        self.refresh_step_list()  
-        self.dataChanged.emit()  
-      
+        main_window = self.main_window  
+        if main_window:  
+            command = StepAddCommand(self.stt_data_manager, self.current_video_name, step_text, segment, main_window)  
+            main_window.undo_stack.push(command)  
+    
     def apply_step_changes(self):  
         """ステップ変更を適用"""  
         current_item = self.step_list.currentItem()  
         if not current_item or not self.stt_data_manager or not self.current_video_name:  
             return  
-          
+        
         index = current_item.data(1)  
         video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
         step = video_data.steps[index]  
-          
-        step.step = self.step_edit_text.text()  
-        step.segment = [self.step_start_spin.value(), self.step_end_spin.value()]  
-        fps = video_data.fps  
-        step.segment_frames = [int(step.segment[0] * fps), int(step.segment[1] * fps)]  
-          
-        self.refresh_step_list()  
-        self.dataChanged.emit()  
-      
+        
+        old_text = step.step  
+        old_segment = step.segment.copy()  
+        new_text = self.step_edit_text.text()  
+        new_segment = [self.step_start_spin.value(), self.step_end_spin.value()]  
+        
+        main_window = self.main_window  
+        if main_window:  
+            # テキスト変更のコマンド  
+            if old_text != new_text:  
+                text_command = StepTextModifyCommand(self.stt_data_manager, self.current_video_name, index, old_text, new_text, main_window)  
+                main_window.undo_stack.push(text_command)  
+            
+            # セグメント変更のコマンド（該当するDetectionIntervalを見つける必要がある）  
+            if old_segment != new_segment:  
+                # Stepsタイムラインから該当するintervalを見つける  
+                for timeline_widget in main_window.multi_timeline_viewer.timeline_widgets:  
+                    timeline = timeline_widget.findChild(TimelineViewer)  
+                    if timeline:  
+                        for interval in timeline.intervals:  
+                            if hasattr(interval, 'label') and interval.label == old_text:  
+                                step_command = StepModifyCommand(interval, old_segment[0], old_segment[1],   
+                                                            new_segment[0], new_segment[1],   
+                                                            self.stt_data_manager, self.current_video_name, main_window)  
+                                main_window.undo_stack.push(step_command)  
+                                break  
+    
     def delete_step(self):  
         """ステップを削除"""  
         current_item = self.step_list.currentItem()  
         if not current_item or not self.stt_data_manager or not self.current_video_name:  
             return  
-          
+        
         index = current_item.data(1)  
-        video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
-        del video_data.steps[index]  
-          
-        self.refresh_step_list()  
-        self.dataChanged.emit()
-
-    def get_main_window(self):  
-        """MainApplicationWindowを取得"""  
-        parent = self.parent()  
-        while parent:  
-            # 文字列ベースの型チェックに変更  
-            if parent.__class__.__name__ == 'MainApplicationWindow':  
-                return parent  
-            parent = parent.parent()  
-        return None
+        main_window = self.main_window  
+        if main_window:  
+            command = StepDeleteCommand(self.stt_data_manager, self.current_video_name, index, main_window)  
+            main_window.undo_stack.push(command)

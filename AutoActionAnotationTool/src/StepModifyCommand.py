@@ -1,5 +1,6 @@
-from PyQt6.QtGui import QUndoCommand
-
+# StepModifyCommand.py (拡張版)  
+from PyQt6.QtGui import QUndoCommand  
+  
 class StepModifyCommand(QUndoCommand):  
     def __init__(self, interval, old_start, old_end, new_start, new_end,   
                  stt_data_manager, video_name, main_window, description="Modify Step"):  
@@ -38,9 +39,93 @@ class StepModifyCommand(QUndoCommand):
                     break  
       
     def _update_ui(self):  
-        """UI更新処理"""  
         if self.main_window:  
-            # Stepsタイムラインを含む全体表示を更新  
             self.main_window.update_display()  
-            # Step editタブのUIも更新  
+            self.main_window.integrated_edit_widget.refresh_step_list()  
+  
+class StepAddCommand(QUndoCommand):  
+    def __init__(self, stt_data_manager, video_name, step_text, segment, main_window, description="Add Step"):  
+        super().__init__(description)  
+        self.stt_data_manager = stt_data_manager  
+        self.video_name = video_name  
+        self.step_text = step_text  
+        self.segment = segment  
+        self.main_window = main_window  
+        self.step_entry = None  
+          
+    def redo(self):  
+        self.stt_data_manager.add_step(self.video_name, self.step_text, self.segment)  
+        # 追加されたステップエントリを保存  
+        if self.video_name in self.stt_data_manager.stt_dataset.database:  
+            video_data = self.stt_data_manager.stt_dataset.database[self.video_name]  
+            self.step_entry = video_data.steps[-1]  # 最後に追加されたもの  
+        self._update_ui()  
+          
+    def undo(self):  
+        if (self.step_entry and self.video_name in self.stt_data_manager.stt_dataset.database):  
+            video_data = self.stt_data_manager.stt_dataset.database[self.video_name]  
+            if self.step_entry in video_data.steps:  
+                video_data.steps.remove(self.step_entry)  
+        self._update_ui()  
+      
+    def _update_ui(self):  
+        if self.main_window:  
+            self.main_window.update_display()  
+            self.main_window.integrated_edit_widget.refresh_step_list()  
+  
+class StepDeleteCommand(QUndoCommand):  
+    def __init__(self, stt_data_manager, video_name, step_index, main_window, description="Delete Step"):  
+        super().__init__(description)  
+        self.stt_data_manager = stt_data_manager  
+        self.video_name = video_name  
+        self.step_index = step_index  
+        self.main_window = main_window  
+        self.deleted_step = None  
+          
+    def redo(self):  
+        if self.video_name in self.stt_data_manager.stt_dataset.database:  
+            video_data = self.stt_data_manager.stt_dataset.database[self.video_name]  
+            if self.step_index < len(video_data.steps):  
+                self.deleted_step = video_data.steps[self.step_index]  
+                del video_data.steps[self.step_index]  
+        self._update_ui()  
+          
+    def undo(self):  
+        if (self.deleted_step and self.video_name in self.stt_data_manager.stt_dataset.database):  
+            video_data = self.stt_data_manager.stt_dataset.database[self.video_name]  
+            video_data.steps.insert(self.step_index, self.deleted_step)  
+        self._update_ui()  
+      
+    def _update_ui(self):  
+        if self.main_window:  
+            self.main_window.update_display()  
+            self.main_window.integrated_edit_widget.refresh_step_list()  
+  
+class StepTextModifyCommand(QUndoCommand):  
+    def __init__(self, stt_data_manager, video_name, step_index, old_text, new_text, main_window, description="Modify Step Text"):  
+        super().__init__(description)  
+        self.stt_data_manager = stt_data_manager  
+        self.video_name = video_name  
+        self.step_index = step_index  
+        self.old_text = old_text  
+        self.new_text = new_text  
+        self.main_window = main_window  
+          
+    def redo(self):  
+        self._set_step_text(self.new_text)  
+        self._update_ui()  
+          
+    def undo(self):  
+        self._set_step_text(self.old_text)  
+        self._update_ui()  
+      
+    def _set_step_text(self, text):  
+        if self.video_name in self.stt_data_manager.stt_dataset.database:  
+            video_data = self.stt_data_manager.stt_dataset.database[self.video_name]  
+            if self.step_index < len(video_data.steps):  
+                video_data.steps[self.step_index].step = text  
+      
+    def _update_ui(self):  
+        if self.main_window:  
+            self.main_window.update_display()  
             self.main_window.integrated_edit_widget.refresh_step_list()

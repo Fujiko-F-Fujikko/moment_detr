@@ -7,11 +7,13 @@ from HandTypeFilterManager import HandTypeFilterManager
 from IntegratedEditWidget import IntegratedEditWidget  
   
 class UILayoutManager:  
-    def __init__(self):  
-        self.ui_components = {}  
-        self.hand_type_filter_manager = HandTypeFilterManager()  
-        self.integrated_edit_widget = IntegratedEditWidget()  
-      
+    def __init__(self, main_window=None):    
+        self.ui_components = {}    
+        self.main_window = main_window
+        self.hand_type_filter_manager = HandTypeFilterManager()    
+        print("UILayoutManager initialized. main_window:", main_window)
+        self.integrated_edit_widget = IntegratedEditWidget(main_window)
+
     def create_main_layout(self, left_panel, right_panel):  
         """メインレイアウトを作成（スプリッター使用）"""  
         splitter = QSplitter(Qt.Orientation.Horizontal)  

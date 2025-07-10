@@ -32,7 +32,7 @@ class MainApplicationWindow(QMainWindow):
         self.video_controller = VideoPlayerController()  
         self.results_manager = ResultsManager()  
         self.file_manager = FileManager()  
-        self.ui_layout_manager = UILayoutManager()  
+        self.ui_layout_manager = UILayoutManager(self)  
         self.app_controller = ApplicationController()  
         self.filter_controller = FilterController(self.app_controller)  
           
