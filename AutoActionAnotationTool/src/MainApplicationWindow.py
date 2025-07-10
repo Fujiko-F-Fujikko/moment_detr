@@ -190,7 +190,7 @@ class MainApplicationWindow(QMainWindow):
             duration_seconds = duration / 1000.0  
             self.multi_timeline_viewer.set_video_duration(duration_seconds)  
             if self.results_manager.get_all_results():  
-                self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())  
+                self.update_timeline_with_steps(self.results_manager.get_all_results())
                 
     def highlight_interval_on_timeline(self, interval):  
         """タイムライン上で指定された区間をハイライト"""  
@@ -221,9 +221,9 @@ class MainApplicationWindow(QMainWindow):
       
     def on_stt_data_changed(self):  
         """STTデータが変更された時の処理"""  
-        # 必要に応じて他のUIコンポーネントを更新  
-        pass  
-  
+        # Timelineを更新してStepsの変更を反映  
+        self.update_timeline_with_steps(self.results_manager.get_all_results())
+
     def save_results(self):    
         """編集された結果を保存"""    
         if not self.results_manager.get_all_results():    
@@ -309,7 +309,7 @@ class MainApplicationWindow(QMainWindow):
           
         # フィルタされた結果を取得してタイムラインビューアに設定  
         filtered_results = self.results_manager.get_filtered_results()  
-        self.multi_timeline_viewer.set_query_results(filtered_results)  
+        self.update_timeline_with_steps(filtered_results)
   
     def update_display(self):    
         """表示を更新"""    
@@ -318,7 +318,7 @@ class MainApplicationWindow(QMainWindow):
             current_position = self.video_controller.get_position_seconds()  
             
             # 全ての推論結果を再設定してタイムラインを更新      
-            self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())      
+            self.update_timeline_with_steps(self.results_manager.get_all_results())
                 
             # 動画の長さも再設定      
             duration_seconds = self.video_controller.get_duration_seconds()    
@@ -333,7 +333,7 @@ class MainApplicationWindow(QMainWindow):
         """Hand Typeフィルタが変更された時の処理"""  
         filtered_results = self.hand_type_filter_manager.get_filtered_results()  
         self.results_manager.update_filtered_results(filtered_results)  
-        self.multi_timeline_viewer.set_query_results(filtered_results)  
+        self.update_timeline_with_steps(filtered_results)
       
     def on_interval_selected(self, interval, index: int):    
         """区間が選択された時の処理（統合編集ウィジェット対応）"""    
@@ -347,15 +347,32 @@ class MainApplicationWindow(QMainWindow):
             
         # 動画をその位置にシーク    
         self.video_controller.seek_to_time(interval.start_time)
-      
+
+    def get_current_video_name(self):  
+        """現在のビデオ名を取得"""  
+        if self.app_controller.video_info:  
+            return Path(self.app_controller.video_info.file_path).stem  
+        return None  
+    
+    def update_timeline_with_steps(self, results):  
+        """Stepsデータとともにタイムラインを更新"""  
+        if hasattr(self, 'multi_timeline_viewer') and results: 
+            video_name = self.get_current_video_name()  
+            self.multi_timeline_viewer.set_query_results(  
+                results,   
+                self.stt_data_manager,   
+                video_name  
+            )
+        else:  
+            print("DEBUG: multi_timeline_viewer or results is None, skipping update")
+
     def on_results_updated(self, results):  
         """結果が更新された時の処理（Hand Type Filter対応）"""  
         # Hand Type Filter Managerに結果を設定  
         self.hand_type_filter_manager.set_results(results)  
-          
-        # タイムラインビューアを更新  
-        self.multi_timeline_viewer.set_query_results(results)  
-          
+        
+        self.update_timeline_with_steps(results)
+
         # STTデータマネージャーに推論結果を追加  
         if self.app_controller.video_info:  
             video_name = Path(self.app_controller.video_info.file_path).stem  
@@ -391,7 +408,7 @@ class MainApplicationWindow(QMainWindow):
         # 1. まずHand Type Filter Managerの結果を適用    
         filtered_results = self.hand_type_filter_manager.get_filtered_results()    
         self.results_manager.update_filtered_results(filtered_results)  
-        self.multi_timeline_viewer.set_query_results(filtered_results)
+        self.update_timeline_with_steps(filtered_results)
  
         # 2. 次に信頼度フィルタを適用(Timelineインスタンスがが再生成されたあとに適用)
         threshold = value / 100.0        
@@ -449,14 +466,48 @@ class MainApplicationWindow(QMainWindow):
         interval.start_time = new_start    
         interval.end_time = new_end    
         
-        # IntegratedEditWidgetを更新    
-        if hasattr(interval, 'query_result') and interval.query_result:    
-            self.integrated_edit_widget.set_current_query_results(interval.query_result)    
-            try:    
-                index = interval.query_result.relevant_windows.index(interval)    
-                self.integrated_edit_widget.set_selected_interval(interval, index)    
-            except ValueError:    
-                pass    
+        # Stepsの区間かどうかを判定  
+        if (hasattr(interval, 'query_result') and   
+            hasattr(interval.query_result, 'query_text') and   
+            interval.query_result.query_text.startswith("Step:")):  
+            
+            # Stepsの場合：STTデータマネージャーでStepデータを更新  
+            video_name = self.get_current_video_name()  
+            if video_name and video_name in self.stt_data_manager.stt_dataset.database:  
+                video_data = self.stt_data_manager.stt_dataset.database[video_name]  
+                
+                # 該当するStepを見つけて更新  
+                step_text = interval.label or interval.query_result.query_text.replace("Step: ", "")  
+                updated_step_index = None  
+                
+                for i, step in enumerate(video_data.steps):  
+                    if step.step == step_text:  
+                        step.segment = [new_start, new_end]  
+                        fps = video_data.fps  
+                        step.segment_frames = [int(new_start * fps), int(new_end * fps)]  
+                        updated_step_index = i  
+                        break  
+                
+                # IntegratedEditWidgetのStep editタブのUIを更新  
+                self.integrated_edit_widget.refresh_step_list()  
+                
+                # 更新されたステップを再選択してUIを更新  
+                if updated_step_index is not None:  
+                    step_list = self.integrated_edit_widget.step_list  
+                    if updated_step_index < step_list.count():  
+                        item = step_list.item(updated_step_index)  
+                        step_list.setCurrentItem(item)  
+                        # on_step_selectedを手動で呼び出してUIを更新  
+                        self.integrated_edit_widget.on_step_selected(item)  
+        else:  
+            # 通常の推論結果の場合：既存の処理  
+            if hasattr(interval, 'query_result') and interval.query_result:    
+                self.integrated_edit_widget.set_current_query_results(interval.query_result)    
+                try:    
+                    index = interval.query_result.relevant_windows.index(interval)    
+                    self.integrated_edit_widget.set_selected_interval(interval, index)    
+                except ValueError:    
+                    pass    
         
         # Detection Resultsリストを更新    
         self.results_manager.update_results_display()    

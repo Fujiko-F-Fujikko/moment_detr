@@ -29,14 +29,21 @@ class MultiTimelineViewer(QWidget):
         
         self.video_duration = 0.0  
           
-    def set_query_results(self, query_results_list):    
+    def set_query_results(self, query_results_list, stt_data_manager=None, video_name=None):
         """VALID_HAND_TYPES毎にタイムラインを作成"""    
         # 現在の再生位置を保存  
         current_playhead_position = getattr(self, 'current_playhead_position', 0.0)  
 
         # 既存のタイムラインをクリア    
         self.clear_timelines()    
-          
+
+        # 1. Stepsタイムラインを最初に追加（常に表示）  
+        steps_timeline = self.create_steps_timeline(stt_data_manager, video_name)  
+        if steps_timeline:  
+            self.timeline_widgets.append(steps_timeline)  
+            self.layout.addWidget(steps_timeline)  
+
+        # 2. 既存の手の種類別タイムライン  
         # VALID_HAND_TYPESでグループ化  
         hand_type_groups = {  
             'LeftHand': [],  
@@ -75,13 +82,13 @@ class MultiTimelineViewer(QWidget):
           
         # 手の種類のラベル  
         hand_label = QLabel(f"Hand Type: {hand_type}")  
-        hand_label.setStyleSheet("font-weight: bold; padding: 5px; background-color: #e0e0e0; font-size: 14px;")  
+        hand_label.setStyleSheet("font-weight: bold; padding: 3px; background-color: #e0e0e0; font-size: 12px;")  
         container_layout.addWidget(hand_label)  
           
         # タイムラインビューア  
         timeline = TimelineViewer()  
-        timeline.setMinimumHeight(100)  
-        timeline.setMaximumHeight(150)  
+        timeline.setMinimumHeight(50)  
+        timeline.setMaximumHeight(75)  
           
         # 重要：新しく作成したタイムラインに動画の長さを設定  
         if self.video_duration > 0:  
@@ -161,3 +168,69 @@ class MultiTimelineViewer(QWidget):
             timeline = widget.findChild(TimelineViewer)  
             if timeline is not None:
                 timeline.set_confidence_threshold(threshold)
+
+    def create_steps_timeline(self, stt_data_manager, video_name):  
+        """Stepsタイムラインウィジェットを作成（データが無くても表示）"""  
+        container = QWidget()  
+        container_layout = QVBoxLayout()  
+        
+        # Stepsラベル（常に表示）  
+        steps_label = QLabel("Steps")  
+        steps_label.setStyleSheet("font-weight: bold; padding: 3px; background-color: #d0e0d0; font-size: 12px;")  
+        container_layout.addWidget(steps_label)  
+        
+        # タイムラインビューア（常に作成）  
+        timeline = TimelineViewer()  
+        timeline.setMinimumHeight(50)  
+        timeline.setMaximumHeight(75)  
+        
+        # 動画の長さを設定  
+        if self.video_duration > 0:  
+            timeline.set_video_duration(self.video_duration)  
+            timeline.enable_time_scale(True)  
+        
+        # Stepデータがある場合のみ区間を設定  
+        step_intervals = []  
+        if (stt_data_manager and video_name and   
+            video_name in stt_data_manager.stt_dataset.database):  
+            video_data = stt_data_manager.stt_dataset.database[video_name]  
+            for step in video_data.steps:  
+                if len(step.segment) >= 2:  
+                    interval = DetectionInterval(  
+                        start_time=step.segment[0],  
+                        end_time=step.segment[1],  
+                        confidence_score=1.0,  
+                        label=step.step  
+                    )  
+                # 重要：Steps用の疑似QueryResultsを作成して埋め込み  
+                step_query_result = type('StepQueryResult', (), {  
+                    'query_text': f"Step: {step.step}",  
+                    'video_id': video_name,  
+                    'relevant_windows': [interval]  
+                })()  
+                interval.query_result = step_query_result  
+                step_intervals.append(interval) 
+
+        timeline.set_intervals(step_intervals)  
+        container_layout.addWidget(timeline)  
+
+        # 重要：イベント接続を追加  
+        timeline.intervalClicked.connect(self.on_interval_clicked_with_embedded_query)  
+        
+        # ドラッグイベントの接続を追加  
+        timeline.intervalDragStarted.connect(self.intervalDragStarted.emit)  
+        timeline.intervalDragMoved.connect(self.intervalDragMoved.emit)  
+        timeline.intervalDragFinished.connect(self.intervalDragFinished.emit) 
+
+        # Steps一覧表示（データがある場合のみ）  
+        if step_intervals:  
+            steps_list_label = QLabel(f"Steps: {', '.join([interval.label for interval in step_intervals])}")  
+        else:  
+            steps_list_label = QLabel("Steps: No steps defined")  
+        
+        steps_list_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")  
+        steps_list_label.setWordWrap(True)  
+        container_layout.addWidget(steps_list_label)  
+        
+        container.setLayout(container_layout)  
+        return container
