@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QPainter, QColor, QPen
+from PyQt6.QtGui import QPainter, QColor, QPen, QCursor
+from PyQt6.QtCore import Qt
 from PyQt6.QtCore import QRect
 from typing import List
 from DetectionInterval import DetectionInterval
@@ -9,7 +10,9 @@ from DetectionInterval import DetectionInterval
 class TimelineViewer(QWidget):  
     intervalClicked = pyqtSignal(DetectionInterval)  
     timePositionChanged = pyqtSignal(float)  
-      
+    intervalDragStarted = pyqtSignal(DetectionInterval)  
+    intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  # interval, new_start, new_end  
+    intervalDragFinished = pyqtSignal(DetectionInterval, float, float)       
     def __init__(self):  
         super().__init__()  
         self.video_duration = 0.0  
@@ -20,8 +23,17 @@ class TimelineViewer(QWidget):
         self.highlighted_interval = None
         self.setMinimumHeight(100)  
         self.time_scale_enabled = False
-          
+
+        # ドラッグ関連の状態管理を追加  
+        self.is_dragging = False  
+        self.dragging_interval = None  
+        self.drag_start_pos = None  
+        self.drag_start_time = None  
+        self.drag_mode = None  # None, 'move', 'resize_start', 'resize_end'  
+        self.resize_edge_threshold = 10  # ピクセル単位でのリサイズエッジの幅  
+
     def set_video_duration(self, duration: float):  
+        print(f"DEBUG: Setting video duration to {duration}")
         self.video_duration = duration  
         self.update()  
       
@@ -75,21 +87,192 @@ class TimelineViewer(QWidget):
             color = QColor(255, int(255 * (1 - normalized_score)), 0, alpha)  # Red to yellow  
             painter.fillRect(int(x), rect.top(), int(clip_width), rect.height(), color)  
             
-    def mousePressEvent(self, event):  
-        if self.video_duration <= 0:  
-            return  
-              
+    def mousePressEvent(self, event):    
+        if self.video_duration <= 0:    
+            return    
         # Convert click position to time  
         click_time = (event.position().x() / self.width()) * self.video_duration  
-          
-        # Check if clicked on an interval  
+        click_x = event.position().x() 
+
+        # クリックされた区間を検索  
+        clicked_interval = None  
         for interval in self.intervals:  
             if interval.start_time <= click_time <= interval.end_time:  
                 self.intervalClicked.emit(interval)  
-                return  
+                clicked_interval = interval
+                break
           
-        # Otherwise, seek to clicked position  
-        self.timePositionChanged.emit(click_time)
+        if clicked_interval:  
+            # 区間内でのクリック位置を判定  
+            start_x = self.width() * clicked_interval.start_time / self.video_duration  
+            end_x = self.width() * clicked_interval.end_time / self.video_duration  
+              
+            # ドラッグモードを決定  
+            if abs(click_x - start_x) <= self.resize_edge_threshold:  
+                self.drag_mode = 'resize_start'  
+                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))  
+            elif abs(click_x - end_x) <= self.resize_edge_threshold:  
+                self.drag_mode = 'resize_end'  
+                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))  
+            else:  
+                self.drag_mode = 'move'  
+                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))  
+              
+            # ドラッグ状態を初期化  
+            self.is_dragging = True  
+            self.dragging_interval = clicked_interval  
+            self.drag_start_pos = event.position()  
+            self.drag_start_time = click_time  
+              
+            # ドラッグ開始シグナルを発火  
+            self.intervalDragStarted.emit(clicked_interval)  
+              
+            print(f"DEBUG: Drag started - mode: {self.drag_mode}, interval: {clicked_interval.start_time}-{clicked_interval.end_time}")  
+            return  
+              
+        # 区間外のクリックの場合は既存の処理  
+        self.timePositionChanged.emit(click_time)  
+
+    def find_snap_position(self, target_time, snap_threshold=0.2):  
+        """スナップ位置を検索"""  
+        snap_positions = []  
+        
+        # 他の区間の境界を追加  
+        for interval in self.intervals:  
+            if interval != self.dragging_interval:  
+                snap_positions.extend([interval.start_time, interval.end_time])  
+        
+        # 時間目盛りの位置を追加  
+        if self.time_scale_enabled:  
+            scale_interval = self.calculate_scale_interval(self.video_duration)  
+            current_time = 0  
+            while current_time <= self.video_duration:  
+                snap_positions.append(current_time)  
+                current_time += scale_interval  
+        
+        # 最も近いスナップ位置を検索  
+        for snap_pos in snap_positions:  
+            if abs(target_time - snap_pos) <= snap_threshold:  
+                return snap_pos  
+        
+        return target_time 
+
+    def check_overlap_constraints(self, new_start, new_end, exclude_interval):  
+        """他の区間との重複をチェック"""  
+        for interval in self.intervals:  
+            if interval == exclude_interval:  
+                continue  
+                
+            # 重複チェック  
+            if not (new_end <= interval.start_time or new_start >= interval.end_time):  
+                return False  # 重複あり  
+        return True  # 重複なし  
+
+    def mouseMoveEvent(self, event):  
+        if not self.is_dragging or not self.dragging_interval:  
+            # ドラッグ中でない場合はカーソル形状を更新  
+            self.updateCursorForPosition(event.position())  
+            return  
+              
+        # ドラッグ中の処理
+        print(f"DEBUG: Mouse moved - video_duration: {self.video_duration}")  
+        current_time = max(0, min(self.video_duration,   
+                                (event.position().x() / self.width()) * self.video_duration))            
+
+        # 新しい開始・終了時間を計算  
+        new_start = self.dragging_interval.start_time  
+        new_end = self.dragging_interval.end_time  
+        min_duration = 0.1  # 最小区間長
+          
+        if self.drag_mode == 'move':  
+            # ピクセル単位で差分を計算  
+            pixel_delta = event.position().x() - self.drag_start_pos.x()  
+            
+            # ピクセル差分を時間差分に変換  
+            time_delta = (pixel_delta / self.width()) * self.video_duration  
+            
+            # 元の区間位置に時間差分を適用  
+            new_start = max(0, self.dragging_interval.start_time + time_delta)  
+            new_end = min(self.video_duration, self.dragging_interval.end_time + time_delta)  
+            
+            # 区間の長さを保持  
+            duration = self.dragging_interval.end_time - self.dragging_interval.start_time  
+            if new_end - new_start != duration:  
+                if new_start == 0:  
+                    new_end = duration  
+                elif new_end == self.video_duration:  
+                    new_start = self.video_duration - duration
+                      
+        elif self.drag_mode == 'resize_start':  
+            # 開始時間を変更  
+            new_start = max(0, min(current_time, self.dragging_interval.end_time - min_duration))  
+            new_start = self.find_snap_position(new_start)   
+
+        elif self.drag_mode == 'resize_end':  
+            # 終了時間を変更  
+            new_end = min(self.video_duration, max(current_time, self.dragging_interval.start_time + min_duration))  
+            new_end = self.find_snap_position(new_end)
+
+        # 重複チェックを追加  
+        if self.check_overlap_constraints(new_start, new_end, self.dragging_interval):  
+            # 重複がない場合のみ更新  
+            self.dragging_interval.start_time = new_start  
+            self.dragging_interval.end_time = new_end  
+            self.update()  
+            self.intervalDragMoved.emit(self.dragging_interval, new_start, new_end)  
+        else:  
+            # 重複がある場合は視覚的フィードバックを提供  
+            self.setCursor(QCursor(Qt.CursorShape.ForbiddenCursor))
+  
+    def mouseReleaseEvent(self, event):  
+        if not self.is_dragging or not self.dragging_interval:  
+            return  
+              
+        # ドラッグ終了処理  
+        final_time = (event.position().x() / self.width()) * self.video_duration  
+          
+        # 最終的な開始・終了時間を計算  
+        new_start = self.dragging_interval.start_time  
+        new_end = self.dragging_interval.end_time  
+          
+        print(f"DEBUG: Drag finished - mode: {self.drag_mode}, new interval: {new_start}-{new_end}")  
+          
+        # ドラッグ終了シグナルを発火  
+        self.intervalDragFinished.emit(self.dragging_interval, new_start, new_end)  
+          
+        # ドラッグ状態をリセット  
+        self.is_dragging = False  
+        self.dragging_interval = None  
+        self.drag_start_pos = None  
+        self.drag_start_time = None  
+        self.drag_mode = None  
+        self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))  
+  
+    def updateCursorForPosition(self, pos):  
+        """マウス位置に応じてカーソル形状を更新"""  
+        if self.video_duration <= 0:  
+            return  
+              
+        click_time = (pos.x() / self.width()) * self.video_duration  
+        click_x = pos.x()  
+          
+        # カーソル形状をリセット  
+        cursor_set = False  
+          
+        for interval in self.intervals:  
+            if interval.start_time <= click_time <= interval.end_time:  
+                start_x = self.width() * interval.start_time / self.video_duration  
+                end_x = self.width() * interval.end_time / self.video_duration  
+                  
+                if abs(click_x - start_x) <= self.resize_edge_threshold or abs(click_x - end_x) <= self.resize_edge_threshold:  
+                    self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))  
+                else:  
+                    self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))  
+                cursor_set = True  
+                break  
+                  
+        if not cursor_set:  
+            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
 
     def draw_current_position(self, painter: QPainter, rect: QRect):  
         """現在の再生位置を描画"""  
@@ -160,18 +343,24 @@ class TimelineViewer(QWidget):
         start_x = rect.width() * interval.start_time / self.video_duration    
         end_x = rect.width() * interval.end_time / self.video_duration    
         width = end_x - start_x    
-            
+
+        alpha = int(interval.confidence_score * 255)    
+        # ドラッグ中の区間は特別な色で表示  
+        if self.is_dragging and interval == self.dragging_interval:  
+            if self.drag_mode == 'move':  
+                color = QColor(255, 165, 0, alpha)  # オレンジ色で移動中を表示  
+            else:  
+                color = QColor(255, 0, 255, alpha)  # マゼンタ色でリサイズ中を表示  
+            border_color = QColor(200, 0, 0)  
         # ハイライト対象かどうかで色を変更  
-        if (self.highlighted_interval and   
+        elif (self.highlighted_interval and   
             interval.start_time == self.highlighted_interval.start_time and  
             interval.end_time == self.highlighted_interval.end_time):  
             # ハイライト色（黄色）  
-            alpha = int(interval.confidence_score * 255)  
             color = QColor(255, 255, 0, alpha)  # 黄色でハイライト  
             border_color = QColor(255, 200, 0)  
         else:  
             # 通常色（青色）  
-            alpha = int(interval.confidence_score * 255)    
             color = QColor(0, 150, 255, alpha)  # Blue with varying transparency    
             border_color = QColor(0, 100, 200)  
             

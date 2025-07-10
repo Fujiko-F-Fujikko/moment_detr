@@ -142,6 +142,14 @@ class MainApplicationWindow(QMainWindow):
         # 複数タイムラインからの区間クリックを接続  
         self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)
   
+        # タイムラインドラッグイベントの接続を追加  
+        self.multi_timeline_viewer.intervalClicked.connect(self.on_timeline_interval_clicked)  
+        
+        # 新しいドラッグイベントの接続（MultiTimelineViewerに伝播させる）  
+        self.multi_timeline_viewer.intervalDragStarted.connect(self.on_interval_drag_started)  
+        self.multi_timeline_viewer.intervalDragMoved.connect(self.on_interval_drag_moved)  
+        self.multi_timeline_viewer.intervalDragFinished.connect(self.on_interval_drag_finished)  
+
     def setup_menus(self):    
         """メニューバーの設定"""    
         menubar = self.menuBar()    
@@ -384,7 +392,68 @@ class MainApplicationWindow(QMainWindow):
             self.confidence_value_label.setText(f"{threshold:.2f}")      
         self.results_manager.set_confidence_threshold(threshold)    
         self.multi_timeline_viewer.set_confidence_threshold(threshold)
-            
+
+    def on_timeline_interval_drag_finished(self, interval, new_start, new_end):  
+        """タイムライン上でのドラッグ完了時の処理"""  
+        print(f"DEBUG: MainApp - Interval drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  
+        
+        # 区間データを更新  
+        interval.start_time = new_start  
+        interval.end_time = new_end  
+        
+        # IntegratedEditWidgetに変更を通知  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
+            # 区間のインデックスを特定  
+            if hasattr(interval.query_result, 'relevant_windows'):  
+                try:  
+                    index = interval.query_result.relevant_windows.index(interval)  
+                    self.integrated_edit_widget.set_selected_interval(interval, index)  
+                except ValueError:  
+                    pass  
+        
+        # 表示を更新  
+        self.update_display()
+
+    def on_interval_drag_started(self, interval):  
+        """ドラッグ開始時の処理"""  
+        print(f"DEBUG: MainApp - Drag started for interval {interval.start_time}-{interval.end_time}")  
+        # 必要に応じて他のUIコンポーネントを無効化  
+    
+    def on_interval_drag_moved(self, interval, new_start, new_end):  
+        """ドラッグ中の処理"""  
+        # リアルタイムでIntegratedEditWidgetのスピンボックスを更新  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
+            try:  
+                index = interval.query_result.relevant_windows.index(interval)  
+                self.integrated_edit_widget.set_selected_interval(interval, index)  
+            except ValueError:  
+                pass  
+  
+    def on_interval_drag_finished(self, interval, new_start, new_end):  
+        """ドラッグ完了時の処理"""  
+        print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  
+        
+        # データを永続化  
+        interval.start_time = new_start  
+        interval.end_time = new_end  
+        
+        # IntegratedEditWidgetを更新  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
+            try:  
+                index = interval.query_result.relevant_windows.index(interval)  
+                self.integrated_edit_widget.set_selected_interval(interval, index)  
+            except ValueError:  
+                pass  
+        
+        # Detection Resultsリストを更新  
+        self.results_manager.update_results_display()  
+        
+        # 変更をシグナルで通知  
+        self.integrated_edit_widget.intervalUpdated.emit()
+
 def parse_arguments():    
     """コマンドライン引数を解析"""    
     parser = argparse.ArgumentParser(description='Moment-DETR Video Annotation Viewer')    

@@ -3,11 +3,15 @@ from PyQt6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel
 from PyQt6.QtCore import pyqtSignal  
 from TimelineViewer import TimelineViewer  
 from STTDataStructures import QueryParser, QueryValidationError  
+from DetectionInterval import DetectionInterval
   
 class MultiTimelineViewer(QWidget):    
     # シグナルを定義    
     intervalClicked = pyqtSignal(object, object)  # (interval, query_result)    
-  
+    intervalDragStarted = pyqtSignal(DetectionInterval)  
+    intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  
+    intervalDragFinished = pyqtSignal(DetectionInterval, float, float)  
+
     def __init__(self):    
         super().__init__()    
         self.timeline_widgets = []    
@@ -98,7 +102,12 @@ class MultiTimelineViewer(QWidget):
           
         # タイムラインのクリックイベントを接続（埋め込まれたクエリ情報を使用）  
         timeline.intervalClicked.connect(self.on_interval_clicked_with_embedded_query)  
-          
+
+        # ドラッグイベントの接続を追加  
+        timeline.intervalDragStarted.connect(self.intervalDragStarted.emit)  
+        timeline.intervalDragMoved.connect(self.intervalDragMoved.emit)  
+        timeline.intervalDragFinished.connect(self.intervalDragFinished.emit)
+
         return container  
   
     def on_interval_clicked_with_embedded_query(self, interval):  
