@@ -2,9 +2,8 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,   
                             QComboBox, QLineEdit, QPushButton, QGroupBox,  
                             QListWidget, QListWidgetItem, QDoubleSpinBox,  
-                            QTabWidget, QTextEdit)  
+                            QTabWidget, QMessageBox)  
 from PyQt6.QtCore import pyqtSignal  
-from STTDataStructures import ActionEntry, StepEntry  
 from Results import QueryResults, DetectionInterval  
   
 class IntegratedEditWidget(QWidget):  
@@ -261,25 +260,60 @@ class IntegratedEditWidget(QWidget):
         self.intervalDeleted.emit()  
         self.dataChanged.emit()  
       
-    def add_new_interval(self):  
-        """新しい区間を追加"""  
-        if not self.current_query_result:  
-            return  
-          
-        start_time = self.start_spinbox.value()  
-        end_time = self.end_spinbox.value()  
-          
+    def add_new_interval(self):    
+        """新しい区間を追加（選択中の区間の右横に配置）"""    
+        if not self.current_query_result:    
+            return    
+            
+        if not self.start_spinbox or not self.end_spinbox:    
+            return    
+            
+        # デフォルトの区間長  
+        default_duration = 5.0  
+        
+        # 現在選択されている区間がある場合は、その終了時刻の直後に配置  
+        if self.selected_interval:  
+            start_time = self.selected_interval.end_time  
+            end_time = start_time + default_duration  
+        else:  
+            # 選択されている区間がない場合は、既存の区間の最後の後に配置  
+            existing_intervals = self.current_query_result.relevant_windows  
+            if existing_intervals:  
+                # 最も遅い終了時刻を見つける  
+                latest_end = max(interval.end_time for interval in existing_intervals)  
+                start_time = latest_end  
+                end_time = start_time + default_duration  
+            else:  
+                # 区間が全くない場合は0秒から開始  
+                start_time = 0.0  
+                end_time = default_duration  
+        
+        # 動画の長さを超えないように調整（実際の動画長を取得する必要があります）  
+        # ここでは仮に60秒としていますが、実際のアプリケーションでは  
+        # self.app_controller.video_info.duration などから取得すべきです  
+        video_duration = 60.0  # 実際の動画長に置き換える  
+        
+        if end_time > video_duration:  
+            end_time = video_duration  
+            start_time = max(0, end_time - default_duration)  
+            
         if start_time >= end_time:  
+            QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")  
             return  
-          
+            
         # 新しい区間を作成  
-        from DetectionInterval import DetectionInterval  
-        new_interval = DetectionInterval(start_time, end_time, 1.0, len(self.current_query_result.relevant_windows))  
-        new_interval.query_result = self.current_query_result  
-          
+        from DetectionInterval import DetectionInterval    
+        new_interval = DetectionInterval(start_time, end_time, 1.0, len(self.current_query_result.relevant_windows))    
+        new_interval.query_result = self.current_query_result    
+            
         self.current_query_result.relevant_windows.append(new_interval)  
-        self.intervalAdded.emit()  
-        self.dataChanged.emit()  
+        
+        # UIを更新して新しい区間を選択状態にする  
+        self.start_spinbox.setValue(start_time)  
+        self.end_spinbox.setValue(end_time)  
+        
+        self.intervalAdded.emit()    
+        self.dataChanged.emit()
       
     def refresh_step_list(self):  
         """ステップリストを更新"""  
