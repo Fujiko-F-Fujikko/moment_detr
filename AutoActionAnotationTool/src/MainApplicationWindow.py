@@ -313,14 +313,21 @@ class MainApplicationWindow(QMainWindow):
   
     def update_display(self):    
         """表示を更新"""    
-        if hasattr(self, 'multi_timeline_viewer') and self.results_manager.get_all_results():    
-            # 全ての推論結果を再設定してタイムラインを更新    
-            self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())    
+        if hasattr(self, 'multi_timeline_viewer') and self.results_manager.get_all_results():      
+            # 現在の動画再生位置を取得  
+            current_position = self.video_controller.get_position_seconds()  
+            
+            # 全ての推論結果を再設定してタイムラインを更新      
+            self.multi_timeline_viewer.set_query_results(self.results_manager.get_all_results())      
                 
-            # 動画の長さも再設定    
-            duration_seconds = self.video_controller.get_duration_seconds()  
-            if duration_seconds > 0:    
+            # 動画の長さも再設定      
+            duration_seconds = self.video_controller.get_duration_seconds()    
+            if duration_seconds > 0:      
                 self.multi_timeline_viewer.set_video_duration(duration_seconds)  
+                
+            # 再生位置を復元  
+            if current_position > 0:  
+                self.multi_timeline_viewer.update_playhead_position(current_position)
       
     def on_hand_type_filter_changed(self):  
         """Hand Typeフィルタが変更された時の処理"""  
@@ -431,28 +438,35 @@ class MainApplicationWindow(QMainWindow):
             except ValueError:  
                 pass  
   
-    def on_interval_drag_finished(self, interval, new_start, new_end):  
-        """ドラッグ完了時の処理"""  
-        print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  
+    def on_interval_drag_finished(self, interval, new_start, new_end):    
+        """ドラッグ完了時の処理"""    
+        print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")    
         
-        # データを永続化  
-        interval.start_time = new_start  
-        interval.end_time = new_end  
+        # 現在の動画再生位置を保存  
+        current_position = self.video_controller.get_position_seconds()  
         
-        # IntegratedEditWidgetを更新  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            self.integrated_edit_widget.set_current_query_results(interval.query_result)  
-            try:  
-                index = interval.query_result.relevant_windows.index(interval)  
-                self.integrated_edit_widget.set_selected_interval(interval, index)  
-            except ValueError:  
-                pass  
+        # データを永続化    
+        interval.start_time = new_start    
+        interval.end_time = new_end    
         
-        # Detection Resultsリストを更新  
-        self.results_manager.update_results_display()  
+        # IntegratedEditWidgetを更新    
+        if hasattr(interval, 'query_result') and interval.query_result:    
+            self.integrated_edit_widget.set_current_query_results(interval.query_result)    
+            try:    
+                index = interval.query_result.relevant_windows.index(interval)    
+                self.integrated_edit_widget.set_selected_interval(interval, index)    
+            except ValueError:    
+                pass    
         
-        # 変更をシグナルで通知  
-        self.integrated_edit_widget.intervalUpdated.emit()
+        # Detection Resultsリストを更新    
+        self.results_manager.update_results_display()    
+        
+        # 変更をシグナルで通知    
+        self.integrated_edit_widget.intervalUpdated.emit()  
+        
+        # 再生位置を復元  
+        if current_position > 0:  
+            self.multi_timeline_viewer.update_playhead_position(current_position)
 
 def parse_arguments():    
     """コマンドライン引数を解析"""    

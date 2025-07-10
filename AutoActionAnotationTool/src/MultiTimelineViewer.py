@@ -31,6 +31,9 @@ class MultiTimelineViewer(QWidget):
           
     def set_query_results(self, query_results_list):    
         """VALID_HAND_TYPES毎にタイムラインを作成"""    
+        # 現在の再生位置を保存  
+        current_playhead_position = getattr(self, 'current_playhead_position', 0.0)  
+
         # 既存のタイムラインをクリア    
         self.clear_timelines()    
           
@@ -58,9 +61,12 @@ class MultiTimelineViewer(QWidget):
                 self.timeline_widgets.append(timeline_widget)  
                 self.layout.addWidget(timeline_widget)  
             
-        # 動画の長さが既に設定されている場合は、全タイムラインに適用    
-        if self.video_duration > 0:    
+        # 動画の長さが既に設定されている場合は、全タイムラインに適用      
+        if self.video_duration > 0:      
             self.set_video_duration(self.video_duration)  
+            # 保存していた再生位置を復元  
+            if current_playhead_position > 0:  
+                self.update_playhead_position(current_playhead_position)
   
     def create_hand_type_timeline(self, hand_type: str, query_results: list):  
         """手の種類毎のタイムラインウィジェットを作成"""  
@@ -142,6 +148,7 @@ class MultiTimelineViewer(QWidget):
   
     def update_playhead_position(self, position: float):  
         """プレイヘッド位置を更新"""  
+        self.current_playhead_position = position  # 現在位置を保存
         for widget in self.timeline_widgets:  
             timeline = widget.findChild(TimelineViewer)  
             if timeline:  
