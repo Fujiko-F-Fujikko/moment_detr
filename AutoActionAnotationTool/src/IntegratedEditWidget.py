@@ -7,8 +7,9 @@ from PyQt6.QtCore import pyqtSignal
 
 from Results import QueryResults, DetectionInterval  
 from TimelineViewer import TimelineViewer
-from UndoCommand import IntervalModifyCommand, IntervalDeleteCommand, IntervalAddCommand
+from IntervalModifyCommand import IntervalModifyCommand, IntervalDeleteCommand, IntervalAddCommand
 from StepModifyCommand import StepModifyCommand, StepDeleteCommand, StepAddCommand, StepTextModifyCommand
+from ActionEditCommand import ActionDetailModifyCommand
 
   
 class IntegratedEditWidget(QWidget):  
@@ -247,17 +248,47 @@ class IntegratedEditWidget(QWidget):
         if not self.selected_interval or not self.current_query_result:  
             return  
         
+        # 時間の変更処理（既存）  
         old_start = self.selected_interval.start_time  
         old_end = self.selected_interval.end_time  
         new_start = self.start_spinbox.value()  
         new_end = self.end_spinbox.value()  
         
-        # MainApplicationWindowのundo_stackにアクセス  
+        # アクション詳細の変更処理（新規追加）  
+        old_query_text = self.current_query_result.query_text  
+        new_query_text = self._build_new_query_text()  
+        
         main_window = self.main_window  
         if main_window:  
-            command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end, main_window)  
-            main_window.undo_stack.push(command)  
-    
+            # 時間変更のコマンド  
+            if old_start != new_start or old_end != new_end:  
+                time_command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end, main_window)  
+                main_window.undo_stack.push(time_command)  
+            
+            # アクション詳細変更のコマンド  
+            if old_query_text != new_query_text:  
+                action_command = ActionDetailModifyCommand(self.current_query_result, old_query_text, new_query_text, main_window)  
+                main_window.undo_stack.push(action_command) 
+
+        # UIを即座に更新（新規追加）  
+        self.update_interval_ui()  
+        
+        # シグナルを発火  
+        self.intervalUpdated.emit()  
+        self.dataChanged.emit()
+
+    def _build_new_query_text(self):  
+        """入力フィールドから新しいクエリテキストを構築"""  
+        hand_mapping = {"left_hand": "LeftHand", "right_hand": "RightHand", "both_hands": "BothHands", "unspecified": "None"}  
+        hand_type = hand_mapping.get(self.hand_combo.currentText(), "None")  
+        
+        action_verb = self.action_verb_edit.text().strip() or "None"  
+        manipulated_object = self.manipulated_object_edit.text().strip() or "None"  
+        target_object = self.target_object_edit.text().strip() or "None"  
+        tool = self.tool_edit.text().strip() or "None"  
+        
+        return f"{hand_type}_{action_verb}_{manipulated_object}_{target_object}_{tool}"
+
     def delete_interval(self):  
         """区間を削除"""  
         if not self.selected_interval or not self.current_query_result:  
@@ -359,7 +390,29 @@ class IntegratedEditWidget(QWidget):
         if main_window:  
             command = StepAddCommand(self.stt_data_manager, self.current_video_name, step_text, segment, main_window)  
             main_window.undo_stack.push(command)  
-    
+            # 追加されたステップを選択状態にする（新規追加）  
+            self._select_newly_added_step(step_text)      
+
+    def _select_newly_added_step(self, step_text):  
+        """新しく追加されたステップを選択状態にする"""  
+        # ステップリストを更新  
+        self.refresh_step_list()  
+        
+        # 追加されたステップを検索して選択  
+        for i in range(self.step_list.count()):  
+            item = self.step_list.item(i)  
+            if item.text() == step_text:  
+                # アイテムを選択状態にする  
+                self.step_list.setCurrentItem(item)  
+                item.setSelected(True)  
+                
+                # スクロールして表示  
+                self.step_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
+                
+                # 編集フィールドに値を設定  
+                self.on_step_selected(item)  
+                break
+
     def apply_step_changes(self):  
         """ステップ変更を適用"""  
         current_item = self.step_list.currentItem()  
@@ -395,7 +448,26 @@ class IntegratedEditWidget(QWidget):
                                                             self.stt_data_manager, self.current_video_name, main_window)  
                                 main_window.undo_stack.push(step_command)  
                                 break  
-    
+
+        # UIを即座に更新（新規追加）  
+        self.refresh_step_list()  
+        self._update_step_edit_ui()  
+        
+        # シグナルを発火  
+        self.dataChanged.emit()
+
+    def _update_step_edit_ui(self):  
+        """Step編集UIの現在選択項目を更新"""  
+        current_item = self.step_list.currentItem()  
+        if current_item and self.stt_data_manager and self.current_video_name:  
+            index = current_item.data(1)  
+            if index < len(self.stt_data_manager.stt_dataset.database[self.current_video_name].steps):  
+                step = self.stt_data_manager.stt_dataset.database[self.current_video_name].steps[index]  
+                self.step_edit_text.setText(step.step)  
+                if len(step.segment) >= 2:  
+                    self.step_start_spin.setValue(step.segment[0])  
+                    self.step_end_spin.setValue(step.segment[1])
+
     def delete_step(self):  
         """ステップを削除"""  
         current_item = self.step_list.currentItem()  

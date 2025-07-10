@@ -41,8 +41,10 @@ class StepModifyCommand(QUndoCommand):
     def _update_ui(self):  
         if self.main_window:  
             self.main_window.update_display()  
-            self.main_window.integrated_edit_widget.refresh_step_list()  
-  
+        # IntegratedEditWidgetのUIも更新  
+        if hasattr(self.main_window, 'integrated_edit_widget'):  
+            self.main_window.integrated_edit_widget.update_interval_ui()  
+
 class StepAddCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_text, segment, main_window, description="Add Step"):  
         super().__init__(description)  
@@ -72,7 +74,10 @@ class StepAddCommand(QUndoCommand):
         if self.main_window:  
             self.main_window.update_display()  
             self.main_window.integrated_edit_widget.refresh_step_list()  
-  
+        # IntegratedEditWidgetのStep編集フィールドも更新  
+        if hasattr(self.main_window, 'integrated_edit_widget'):  
+            self.main_window.integrated_edit_widget._update_step_edit_ui()  
+
 class StepDeleteCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_index, main_window, description="Delete Step"):  
         super().__init__(description)  
@@ -100,7 +105,10 @@ class StepDeleteCommand(QUndoCommand):
         if self.main_window:  
             self.main_window.update_display()  
             self.main_window.integrated_edit_widget.refresh_step_list()  
-  
+        # IntegratedEditWidgetのStep編集フィールドも更新  
+        if hasattr(self.main_window, 'integrated_edit_widget'):  
+            self.main_window.integrated_edit_widget._update_step_edit_ui()  
+
 class StepTextModifyCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_index, old_text, new_text, main_window, description="Modify Step Text"):  
         super().__init__(description)  
@@ -128,4 +136,6 @@ class StepTextModifyCommand(QUndoCommand):
     def _update_ui(self):  
         if self.main_window:  
             self.main_window.update_display()  
-            self.main_window.integrated_edit_widget.refresh_step_list()
+        # IntegratedEditWidgetのUIも更新  
+        if hasattr(self.main_window, 'integrated_edit_widget'):  
+            self.main_window.integrated_edit_widget.update_interval_ui()

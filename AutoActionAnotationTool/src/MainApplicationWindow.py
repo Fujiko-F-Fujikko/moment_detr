@@ -13,7 +13,7 @@ from ResultsManager import ResultsManager
 from FileManager import FileManager  
 from UILayoutManager import UILayoutManager  
 from TimelineViewer import TimelineViewer
-from UndoCommand import IntervalModifyCommand
+from IntervalModifyCommand import IntervalModifyCommand
 from StepModifyCommand import StepModifyCommand
   
 # STT関連の新しいクラスをインポート  
@@ -473,7 +473,13 @@ class MainApplicationWindow(QMainWindow):
                 self.integrated_edit_widget.set_selected_interval(interval, index)  
             except ValueError:  
                 pass  
-  
+        # Stepの区間の場合は、Step Editタブのスピンボックスも更新  
+        if (hasattr(interval.query_result, 'query_text') and   
+            interval.query_result.query_text.startswith("Step:")):  
+            # Step Editタブのスピンボックスを直接更新  
+            self.integrated_edit_widget.step_start_spin.setValue(new_start)  
+            self.integrated_edit_widget.step_end_spin.setValue(new_end)
+
     def on_interval_drag_finished(self, interval, new_start, new_end):  
         """ドラッグ完了時の処理"""  
         print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  

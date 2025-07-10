@@ -20,3 +20,7 @@ class ActionDetailModifyCommand(QUndoCommand):
     def _update_ui(self):  
         if self.main_window:  
             self.main_window.update_display()
+
+        # IntegratedEditWidgetのUIも更新  
+        if hasattr(self.main_window, 'integrated_edit_widget'):  
+            self.main_window.integrated_edit_widget.update_interval_ui()
