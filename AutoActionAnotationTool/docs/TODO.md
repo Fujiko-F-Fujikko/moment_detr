@@ -1,7 +1,7 @@
 # TODO
 
 - 残件リスト
-    - [ ]  Intervalがマウス操作できる（ドラッグ・start/endの位置移動）
+    - [x]  Intervalがマウス操作できる（ドラッグ・start/endの位置移動）
     - [ ]  StepsもTimelineViewerに表示する（一番上の段）
     - [ ]  新しいIntervalを追加するときに元のに被らないようにする
     - [ ]  Intervalの複製

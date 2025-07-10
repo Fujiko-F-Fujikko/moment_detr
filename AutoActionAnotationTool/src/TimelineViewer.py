@@ -117,6 +117,9 @@ class TimelineViewer(QWidget):
             else:  
                 self.drag_mode = 'move'  
                 self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))  
+                # 元の区間位置を保存 
+                self.original_start_time = clicked_interval.start_time  
+                self.original_end_time = clicked_interval.end_time  
               
             # ドラッグ状態を初期化  
             self.is_dragging = True  
@@ -191,10 +194,10 @@ class TimelineViewer(QWidget):
             # ピクセル差分を時間差分に変換  
             time_delta = (pixel_delta / self.width()) * self.video_duration  
             
-            # 元の区間位置に時間差分を適用  
-            new_start = max(0, self.dragging_interval.start_time + time_delta)  
-            new_end = min(self.video_duration, self.dragging_interval.end_time + time_delta)  
-            
+            # 元の区間位置に時間差分を適用（修正）  
+            new_start = max(0, self.original_start_time + time_delta)  
+            new_end = min(self.video_duration, self.original_end_time + time_delta)              
+
             # 区間の長さを保持  
             duration = self.dragging_interval.end_time - self.dragging_interval.start_time  
             if new_end - new_start != duration:  
