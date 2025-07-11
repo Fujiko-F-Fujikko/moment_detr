@@ -3,8 +3,8 @@ import sys
 import argparse  
 from pathlib import Path  
   
-from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox, QDialog
-from PyQt6.QtGui import QAction, QUndoStack, QAction, QKeySequence
+from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox, QDialog, QComboBox, QPushButton
+from PyQt6.QtGui import QAction, QUndoStack, QAction, QKeySequence, QShortcut
 from PyQt6.QtCore import Qt
   
 from MultiTimelineViewer import MultiTimelineViewer  
@@ -196,8 +196,33 @@ class MainApplicationWindow(QMainWindow):
         edit_menu.addAction(redo_action)  
         
         edit_menu.addSeparator()  
-          
-          
+
+        # ファイル操作のショートカット  
+        open_video_action.setShortcut(QKeySequence.StandardKey.Open)  
+        save_results_action.setShortcut(QKeySequence.StandardKey.Save)  
+        
+        # カスタムショートカット          
+        # 動画再生制御  
+        play_pause_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Space), self)  
+        play_pause_shortcut.activated.connect(self.video_controller.toggle_playback)  
+
+        # 動画シーク制御  
+        left_arrow_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Left), self)  
+        left_arrow_shortcut.activated.connect(lambda: self.seek_relative(-0.1))  
+        
+        right_arrow_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Right), self)  
+        right_arrow_shortcut.activated.connect(lambda: self.seek_relative(0.1))  
+
+        # 編集操作  
+        delete_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self)  
+        delete_shortcut.activated.connect(self.integrated_edit_widget.delete_interval) 
+        
+        # タブ切り替え  
+        action_tab_shortcut = QShortcut(QKeySequence("Ctrl+1"), self)  
+        action_tab_shortcut.activated.connect(lambda: self.integrated_edit_widget.tab_widget.setCurrentIndex(0))
+        step_tab_shortcut = QShortcut(QKeySequence("Ctrl+2"), self)  
+        step_tab_shortcut.activated.connect(lambda: self.integrated_edit_widget.tab_widget.setCurrentIndex(1))
+
     # 新しいイベントハンドラー  
     def on_video_position_changed(self, position: int):  
         """動画位置が変更された時の処理"""  
@@ -583,6 +608,33 @@ class MainApplicationWindow(QMainWindow):
         from IntervalModifyCommand import IntervalAddCommand  
         command = IntervalAddCommand(current_query_result, new_interval, self)  
         self.undo_stack.push(command)
+
+    def seek_relative(self, seconds: float):  
+        """現在位置から相対的にシーク"""  
+        current_position = self.video_controller.get_position_seconds()  
+        new_position = max(0, current_position + seconds)  
+        duration = self.video_controller.get_duration_seconds()  
+        if duration > 0:  
+            new_position = min(new_position, duration)  
+        self.video_controller.seek_to_time(new_position)
+
+    def keyPressEvent(self, event):  
+        """グローバルキーイベント処理"""  
+        if event.key() == Qt.Key.Key_Tab:  
+            # Tabキーでフォーカス移動  
+            self.focusNextChild()  
+            event.accept()  
+        elif event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:  
+            # Enterキーで決定  
+            focused_widget = self.focusWidget()  
+            if isinstance(focused_widget, QPushButton):  
+                focused_widget.click()  
+            elif isinstance(focused_widget, QComboBox):  
+                # コンボボックスの場合はドロップダウンを開く  
+                focused_widget.showPopup()  
+            event.accept()  
+        else:  
+            super().keyPressEvent(event)
 
     def debug_undo_stack(self, operation_name=""):  
         """Undo/Redoスタックの状態をデバッグ出力"""  

@@ -476,3 +476,18 @@ class TimelineViewer(QWidget):
         pen = QPen(border_color, 2, Qt.PenStyle.DashLine)  
         painter.setPen(pen)  
         painter.drawRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20)
+
+    def keyPressEvent(self, event):  
+        """タイムラインのキーイベント処理"""  
+        if event.key() == Qt.Key.Key_Delete:  
+            # 選択された区間を削除  
+            if self.highlighted_interval:  
+                self.intervalClicked.emit(self.highlighted_interval)  
+        elif event.key() == Qt.Key.Key_Left:  
+            # 前の区間に移動  
+            self._select_previous_interval()  
+        elif event.key() == Qt.Key.Key_Right:  
+            # 次の区間に移動  
+            self._select_next_interval()  
+        else:  
+            super().keyPressEvent(event)

@@ -156,3 +156,14 @@ class UILayoutManager:
         }  
           
         return group, components
+
+    def setup_tab_order(self):  
+        """タブオーダーを設定"""  
+        # Hand Type Filter  
+        self.hand_type_combo.setTabOrder(self.hand_type_combo, self.results_list)  
+        
+        # Results List  
+        self.results_list.setTabOrder(self.results_list, self.confidence_slider)  
+        
+        # Confidence Filter  
+        self.confidence_slider.setTabOrder(self.confidence_slider, self.integrated_edit_widget)
