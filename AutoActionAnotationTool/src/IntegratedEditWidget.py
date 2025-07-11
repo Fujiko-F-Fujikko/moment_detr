@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                             QComboBox, QLineEdit, QPushButton, QGroupBox,  
                             QListWidget, QListWidgetItem, QDoubleSpinBox,  
                             QTabWidget, QMessageBox)  
-from PyQt6.QtCore import pyqtSignal  
+from PyQt6.QtCore import pyqtSignal, QTimer
 
 from Results import QueryResults, DetectionInterval  
 from TimelineViewer import TimelineViewer
@@ -98,22 +98,28 @@ class IntegratedEditWidget(QWidget):
         action_detail_layout.addWidget(self.target_object_edit)  
         action_detail_layout.addWidget(QLabel("Tool:"))  
         action_detail_layout.addWidget(self.tool_edit)  
+
+        # 即時反映のためのシグナル接続を追加  
+        self.start_spinbox.valueChanged.connect(self.on_action_value_changed)  
+        self.end_spinbox.valueChanged.connect(self.on_action_value_changed)  
+        self.hand_combo.currentTextChanged.connect(self.on_action_value_changed)  
+        self.action_verb_edit.textChanged.connect(self.on_action_value_changed)  
+        self.manipulated_object_edit.textChanged.connect(self.on_action_value_changed)  
+        self.target_object_edit.textChanged.connect(self.on_action_value_changed)  
+        self.tool_edit.textChanged.connect(self.on_action_value_changed)         
           
         interval_layout.addLayout(action_detail_layout)  
           
         # ボタン  
         button_layout = QHBoxLayout()  
-        self.apply_button = QPushButton("Apply Changes")  
-        self.delete_button = QPushButton("Delete Interval")  
         self.add_button = QPushButton("Add New Interval")  
+        self.delete_button = QPushButton("Delete Interval")  
           
-        self.apply_button.clicked.connect(self.apply_interval_changes)  
-        self.delete_button.clicked.connect(self.delete_interval)  
         self.add_button.clicked.connect(self.add_new_interval)  
+        self.delete_button.clicked.connect(self.delete_interval)  
           
-        button_layout.addWidget(self.apply_button)  
-        button_layout.addWidget(self.delete_button)  
         button_layout.addWidget(self.add_button)  
+        button_layout.addWidget(self.delete_button)  
         interval_layout.addLayout(button_layout)  
           
         interval_group.setLayout(interval_layout)  
@@ -151,7 +157,10 @@ class IntegratedEditWidget(QWidget):
         self.step_edit_text = QLineEdit()  
         edit_layout.addWidget(QLabel("Step Description:"))  
         edit_layout.addWidget(self.step_edit_text)  
-          
+
+        # 即時反映のためのシグナル接続を追加  
+        self.step_edit_text.textChanged.connect(self.on_step_value_changed)  
+
         # セグメント編集  
         segment_layout = QHBoxLayout()  
         self.step_start_spin = QDoubleSpinBox()  
@@ -160,7 +169,11 @@ class IntegratedEditWidget(QWidget):
         self.step_end_spin = QDoubleSpinBox()  
         self.step_end_spin.setDecimals(2)  
         self.step_end_spin.setMaximum(9999.99)  
-          
+
+        # 即時反映のためのシグナル接続を追加  
+        self.step_start_spin.valueChanged.connect(self.on_step_value_changed)  
+        self.step_end_spin.valueChanged.connect(self.on_step_value_changed)
+
         segment_layout.addWidget(QLabel("Start:"))  
         segment_layout.addWidget(self.step_start_spin)  
         segment_layout.addWidget(QLabel("End:"))  
@@ -169,12 +182,9 @@ class IntegratedEditWidget(QWidget):
           
         # ボタン  
         button_layout = QHBoxLayout()  
-        self.apply_step_btn = QPushButton("Apply Changes")  
-        self.apply_step_btn.clicked.connect(self.apply_step_changes)  
         self.delete_step_btn = QPushButton("Delete Step")  
         self.delete_step_btn.clicked.connect(self.delete_step)  
           
-        button_layout.addWidget(self.apply_step_btn)  
         button_layout.addWidget(self.delete_step_btn)  
         edit_layout.addLayout(button_layout)  
           
@@ -451,6 +461,7 @@ class IntegratedEditWidget(QWidget):
 
         # UIを即座に更新（新規追加）  
         self.refresh_step_list()  
+        self._restore_step_selection(new_text, index)  
         self._update_step_edit_ui()  
         
         # シグナルを発火  
@@ -512,5 +523,43 @@ class IntegratedEditWidget(QWidget):
                 self.step_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
                 
                 # 編集フィールドに値を設定  
+                self.on_step_selected(item)  
+                break
+
+    def on_action_value_changed(self):  
+        """Action値が変更された時の即時処理"""  
+        # 少し遅延を入れて連続入力を防ぐ  
+        if hasattr(self, '_action_timer'):  
+            self._action_timer.stop()  
+        
+        self._action_timer = QTimer()  
+        self._action_timer.setSingleShot(True)  
+        self._action_timer.timeout.connect(self.apply_interval_changes)  
+        self._action_timer.start(500)  # 500ms後に適用
+
+    def on_step_value_changed(self):  
+        """Step値が変更された時の即時処理"""  
+        # 少し遅延を入れて連続入力を防ぐ  
+        if hasattr(self, '_step_timer'):  
+            self._step_timer.stop()  
+        
+        from PyQt6.QtCore import QTimer  
+        self._step_timer = QTimer()  
+        self._step_timer.setSingleShot(True)  
+        self._step_timer.timeout.connect(self.apply_step_changes)  
+        self._step_timer.start(500)  # 500ms後に適用
+
+    def _restore_step_selection(self, step_text, original_index):  
+        """ステップの選択状態を復元"""  
+        # 更新されたステップテキストまたは元のインデックスで検索  
+        for i in range(self.step_list.count()):  
+            item = self.step_list.item(i)  
+            item_index = item.data(1)  
+            
+            # インデックスが一致するか、テキストが一致する場合に選択  
+            if item_index == original_index or item.text() == step_text:  
+                self.step_list.setCurrentItem(item)  
+                item.setSelected(True)  
+                self.step_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
                 self.on_step_selected(item)  
                 break
