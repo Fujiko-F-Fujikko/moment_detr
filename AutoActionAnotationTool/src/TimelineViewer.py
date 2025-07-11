@@ -95,59 +95,52 @@ class TimelineViewer(QWidget):
             color = QColor(255, int(255 * (1 - normalized_score)), 0, alpha)  # Red to yellow  
             painter.fillRect(int(x), rect.top(), int(clip_width), rect.height(), color)  
             
-    def mousePressEvent(self, event):    
-        if self.video_duration <= 0:    
+    def mousePressEvent(self, event):      
+        if self.video_duration <= 0:      
+            return      
+        
+        click_time = (event.position().x() / self.width()) * self.video_duration    
+        click_x = event.position().x()   
+    
+        # クリックされた区間を検索    
+        clicked_interval = None    
+        for interval in self.intervals:    
+            if interval.start_time <= click_time <= interval.end_time:    
+                self.intervalClicked.emit(interval)    
+                clicked_interval = interval  
+                break  
+                
+        if clicked_interval:    
+            # ドラッグの準備のみ行い、実際のドラッグ状態は設定しない  
+            start_x = self.width() * clicked_interval.start_time / self.video_duration    
+            end_x = self.width() * clicked_interval.end_time / self.video_duration    
+                    
+            # ドラッグモードを決定    
+            if abs(click_x - start_x) <= self.resize_edge_threshold:    
+                self.drag_mode = 'resize_start'    
+                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))    
+            elif abs(click_x - end_x) <= self.resize_edge_threshold:    
+                self.drag_mode = 'resize_end'    
+                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))    
+            else:    
+                self.drag_mode = 'move'    
+                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))    
+                self.original_start_time = clicked_interval.start_time    
+                self.original_end_time = clicked_interval.end_time    
+                    
+            # ドラッグの準備情報のみ保存（is_dragging は設定しない）  
+            self.potential_dragging_interval = clicked_interval    
+            self.drag_start_pos = event.position()    
+            self.drag_start_time = click_time    
             return    
-        # Convert click position to time  
-        click_time = (event.position().x() / self.width()) * self.video_duration  
-        click_x = event.position().x() 
-
-        # クリックされた区間を検索  
-        clicked_interval = None  
-        for interval in self.intervals:  
-            if interval.start_time <= click_time <= interval.end_time:  
-                self.intervalClicked.emit(interval)  
-                clicked_interval = interval
-                break
-          
-        if clicked_interval:  
-            # 区間内でのクリック位置を判定  
-            start_x = self.width() * clicked_interval.start_time / self.video_duration  
-            end_x = self.width() * clicked_interval.end_time / self.video_duration  
-              
-            # ドラッグモードを決定  
-            if abs(click_x - start_x) <= self.resize_edge_threshold:  
-                self.drag_mode = 'resize_start'  
-                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))  
-            elif abs(click_x - end_x) <= self.resize_edge_threshold:  
-                self.drag_mode = 'resize_end'  
-                self.setCursor(QCursor(Qt.CursorShape.SizeHorCursor))  
-            else:  
-                self.drag_mode = 'move'  
-                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))  
-                # 元の区間位置を保存 
-                self.original_start_time = clicked_interval.start_time  
-                self.original_end_time = clicked_interval.end_time  
-              
-            # ドラッグ状態を初期化  
-            self.is_dragging = True  
-            self.dragging_interval = clicked_interval  
-            self.drag_start_pos = event.position()  
-            self.drag_start_time = click_time  
-              
-            # ドラッグ開始シグナルを発火  
-            self.intervalDragStarted.emit(clicked_interval)  
-              
-            print(f"DEBUG: Drag started - mode: {self.drag_mode}, interval: {clicked_interval.start_time}-{clicked_interval.end_time}")  
-            return  
-        else:  
-            # 空白領域での新規区間作成開始  
-            self.is_creating_new_interval = True  
-            self.new_interval_start_time = click_time  
-            self.new_interval_start_pos = click_x  
-            self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
-              
-        # 区間外のクリックの場合は既存の処理  
+        else:    
+            # 空白領域での新規区間作成開始    
+            self.is_creating_new_interval = True    
+            self.new_interval_start_time = click_time    
+            self.new_interval_start_pos = click_x    
+            self.setCursor(QCursor(Qt.CursorShape.CrossCursor))  
+                
+        # 区間外のクリックの場合は既存の処理    
         self.timePositionChanged.emit(click_time)  
 
     def find_snap_position(self, target_time, snap_threshold=0.2):  
@@ -193,6 +186,24 @@ class TimelineViewer(QWidget):
             self.new_interval_end_time = max(current_time, self.new_interval_start_time + 0.1)  
             self.update()  # プレビュー表示のため再描画  
             return  
+
+        # ドラッグ準備状態からの移行チェック  
+        if (hasattr(self, 'potential_dragging_interval') and   
+            self.potential_dragging_interval and   
+            not self.is_dragging):  
+            
+            # 最小移動距離を設定（例：5ピクセル）  
+            min_drag_distance = 5  
+            if hasattr(self, 'drag_start_pos'):  
+                distance = ((event.position().x() - self.drag_start_pos.x()) ** 2 +   
+                        (event.position().y() - self.drag_start_pos.y()) ** 2) ** 0.5  
+                
+                if distance >= min_drag_distance:  
+                    # 実際のドラッグ開始  
+                    self.is_dragging = True  
+                    self.dragging_interval = self.potential_dragging_interval  
+                    self.intervalDragStarted.emit(self.dragging_interval)  
+                    print(f"DEBUG: Actual drag started after {distance:.1f}px movement")  
 
         # ホバー中の処理
         if not self.is_dragging:  
@@ -286,7 +297,8 @@ class TimelineViewer(QWidget):
         # ドラッグ状態をリセット  
         self.is_dragging = False  
         self.is_creating_new_interval = False
-        self.dragging_interval = None  
+        self.dragging_interval = None 
+        self.potential_dragging_interval = None 
         self.drag_start_pos = None  
         self.drag_start_time = None  
         self.drag_mode = None  

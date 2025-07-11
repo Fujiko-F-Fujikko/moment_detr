@@ -224,66 +224,113 @@ class IntegratedEditWidget(QWidget):
     def update_interval_ui(self):  
         """区間編集UIを更新"""  
         if self.selected_interval:  
+            # シグナルを一時的に無効化  
+            self.start_spinbox.blockSignals(True)  
+            self.end_spinbox.blockSignals(True)  
+            
             self.start_spinbox.setValue(self.selected_interval.start_time)  
             self.end_spinbox.setValue(self.selected_interval.end_time)  
             self.confidence_label.setText(f"Confidence: {self.selected_interval.confidence_score:.3f}")  
-              
-            # クエリから手の種類とアクション要素を推定  
-            if self.current_query_result:  
-                # Stepクエリの場合は検証をスキップ  
-                if self.current_query_result.query_text.startswith("Step:"):  
-                    # Stepの場合は手の種類とアクション要素の設定をスキップ  
+            
+            # Stepクエリの場合はAction編集フィールドの更新をスキップ  
+            if self.current_query_result and not self.current_query_result.query_text.startswith("Step:"):  
+                # Action編集フィールドのシグナルも無効化  
+                self.hand_combo.blockSignals(True)  
+                self.action_verb_edit.blockSignals(True)  
+                self.manipulated_object_edit.blockSignals(True)  
+                self.target_object_edit.blockSignals(True)  
+                self.tool_edit.blockSignals(True)  
+                
+                try:  
+                    from STTDataStructures import QueryParser  
+                    hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
+                    
+                    # 手の種類を設定  
+                    hand_mapping = {"LeftHand": "left_hand", "RightHand": "right_hand", "BothHands": "both_hands", "None": "unspecified"}  
+                    self.hand_combo.setCurrentText(hand_mapping.get(hand_type, "unspecified"))  
+                    
+                    # アクション要素を設定  
+                    self.action_verb_edit.setText(action_data.action_verb or "")  
+                    self.manipulated_object_edit.setText(action_data.manipulated_object or "")  
+                    self.target_object_edit.setText(action_data.target_object or "")  
+                    self.tool_edit.setText(action_data.tool or "")  
+                except:  
                     pass  
-                else:
-                    try:  
-                        hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
-                        
-                        # 手の種類を設定  
-                        hand_mapping = {"LeftHand": "left_hand", "RightHand": "right_hand", "BothHands": "both_hands", "None": "unspecified"}  
-                        self.hand_combo.setCurrentText(hand_mapping.get(hand_type, "unspecified"))  
-                        
-                        # アクション要素を設定  
-                        self.action_verb_edit.setText(action_data.action_verb or "")  
-                        self.manipulated_object_edit.setText(action_data.manipulated_object or "")  
-                        self.target_object_edit.setText(action_data.target_object or "")  
-                        self.tool_edit.setText(action_data.tool or "")  
-                    except:  
-                        pass  
+                finally:  
+                    # Action編集フィールドのシグナルを再有効化  
+                    self.hand_combo.blockSignals(False)  
+                    self.action_verb_edit.blockSignals(False)  
+                    self.manipulated_object_edit.blockSignals(False)  
+                    self.target_object_edit.blockSignals(False)  
+                    self.tool_edit.blockSignals(False)  
+            
+            # 時間編集フィールドのシグナルを再有効化  
+            self.start_spinbox.blockSignals(False)  
+            self.end_spinbox.blockSignals(False)  
         else:  
-            self.start_spinbox.setValue(0.0)  
-            self.end_spinbox.setValue(0.0)  
-            self.confidence_label.setText("Confidence: N/A")  
-            self.action_verb_edit.clear()  
-            self.manipulated_object_edit.clear()  
-            self.target_object_edit.clear()  
+            # Action編集フィールドのシグナルを無効化  
+            self.hand_combo.blockSignals(True)  
+            self.action_verb_edit.blockSignals(True)  
+            self.manipulated_object_edit.blockSignals(True)  
+            self.target_object_edit.blockSignals(True)  
+            self.tool_edit.blockSignals(True)  
+            
+            self.start_spinbox.setValue(0.0)    
+            self.end_spinbox.setValue(0.0)    
+            self.confidence_label.setText("Confidence: N/A")    
+            self.action_verb_edit.clear()    
+            self.manipulated_object_edit.clear()    
+            self.target_object_edit.clear()    
             self.tool_edit.clear()  
-      
+            
+            # Action編集フィールドのシグナルを再有効化  
+            self.hand_combo.blockSignals(False)  
+            self.action_verb_edit.blockSignals(False)  
+            self.manipulated_object_edit.blockSignals(False)  
+            self.target_object_edit.blockSignals(False)  
+            self.tool_edit.blockSignals(False)
+
     def apply_interval_changes(self):  
         """区間変更を適用"""  
         if not self.selected_interval or not self.current_query_result:  
             return  
-        
-        # 時間の変更処理（既存）  
+
+        # Stepクエリの場合は何もしない  
+        if self.current_query_result.query_text.startswith("Step:"):  
+            print("DEBUG: Skipping apply_interval_changes for Step query")  
+            return
+
+        # 現在の値を取得  
         old_start = self.selected_interval.start_time  
         old_end = self.selected_interval.end_time  
         new_start = self.start_spinbox.value()  
         new_end = self.end_spinbox.value()  
         
-        # アクション詳細の変更処理（新規追加）  
         old_query_text = self.current_query_result.query_text  
         new_query_text = self._build_new_query_text()  
         
+        # 実際に変更があるかチェック（浮動小数点の比較を考慮）  
+        time_changed = (abs(old_start - new_start) > 0.01 or abs(old_end - new_end) > 0.01)  
+        query_changed = (old_query_text != new_query_text)  
+        
+        # 変更がない場合は何もしない  
+        if not time_changed and not query_changed:  
+            print("DEBUG: No actual changes detected, skipping command creation")  
+            return  
+        
         main_window = self.main_window  
         if main_window:  
-            # 時間変更のコマンド  
-            if old_start != new_start or old_end != new_end:  
+            # デバッグ：変更前のスタック状態  
+            main_window.debug_undo_stack("BEFORE apply_interval_changes")  
+
+            # 実際に変更がある場合のみコマンドを作成  
+            if time_changed:  
                 time_command = IntervalModifyCommand(self.selected_interval, old_start, old_end, new_start, new_end, main_window)  
                 main_window.undo_stack.push(time_command)  
             
-            # アクション詳細変更のコマンド  
-            if old_query_text != new_query_text:  
+            if query_changed:  
                 action_command = ActionDetailModifyCommand(self.current_query_result, old_query_text, new_query_text, main_window)  
-                main_window.undo_stack.push(action_command) 
+                main_window.undo_stack.push(action_command)
 
         # UIを即座に更新（新規追加）  
         self.update_interval_ui()  
@@ -380,20 +427,42 @@ class IntegratedEditWidget(QWidget):
                 item.setData(1, i)  
                 self.step_list.addItem(item)  
       
-    def on_step_selected(self, item):  
-        """ステップ選択時の処理"""  
-        if not self.stt_data_manager or not self.current_video_name:  
-            return  
-          
-        index = item.data(1)  
-        video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
-        step = video_data.steps[index]  
-          
-        self.step_edit_text.setText(step.step)  
-        if len(step.segment) >= 2:  
-            self.step_start_spin.setValue(step.segment[0])  
-            self.step_end_spin.setValue(step.segment[1])  
-      
+    def on_step_selected(self, item):    
+        """ステップ選択時の処理"""    
+        print(f"DEBUG: on_step_selected called for item: {item.text()}")  
+        
+        if not self.stt_data_manager or not self.current_video_name:    
+            return    
+        
+        # デバッグ：選択前のスタック状態  
+        if self.main_window:  
+            self.main_window.debug_undo_stack("BEFORE on_step_selected")  
+        
+        index = item.data(1)    
+        video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]    
+        step = video_data.steps[index]    
+        
+        # シグナルを一時的に無効化  
+        print("DEBUG: Blocking signals for step UI components")  
+        self.step_edit_text.blockSignals(True)  
+        self.step_start_spin.blockSignals(True)  
+        self.step_end_spin.blockSignals(True)  
+        
+        self.step_edit_text.setText(step.step)    
+        if len(step.segment) >= 2:    
+            self.step_start_spin.setValue(step.segment[0])    
+            self.step_end_spin.setValue(step.segment[1])    
+        
+        # シグナルを再有効化  
+        print("DEBUG: Unblocking signals for step UI components")  
+        self.step_edit_text.blockSignals(False)  
+        self.step_start_spin.blockSignals(False)  
+        self.step_end_spin.blockSignals(False)  
+        
+        # デバッグ：選択後のスタック状態  
+        if self.main_window:  
+            self.main_window.debug_undo_stack("AFTER on_step_selected")
+
     def add_step(self):  
         """ステップを追加"""  
         step_text = self.step_text_edit.text().strip()  
@@ -443,6 +512,16 @@ class IntegratedEditWidget(QWidget):
         new_text = self.step_edit_text.text()  
         new_segment = [self.step_start_spin.value(), self.step_end_spin.value()]  
         
+        # 実際に変更があるかチェック  
+        text_changed = (old_text != new_text)  
+        segment_changed = (abs(old_segment[0] - new_segment[0]) > 0.01 or   
+                        abs(old_segment[1] - new_segment[1]) > 0.01)  
+        
+        # 変更がない場合は何もしない  
+        if not text_changed and not segment_changed:  
+            print("DEBUG: No actual step changes detected, skipping command creation")  
+            return  
+
         main_window = self.main_window  
         if main_window:  
             # テキスト変更のコマンド  
@@ -496,19 +575,22 @@ class IntegratedEditWidget(QWidget):
             command = StepDeleteCommand(self.stt_data_manager, self.current_video_name, index, main_window)  
             main_window.undo_stack.push(command)
 
-    def switch_to_appropriate_tab(self, interval):  
-        """区間の種類に応じて適切なタブに切り替える"""  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            query_text = interval.query_result.query_text  
+    def switch_to_appropriate_tab(self, interval):    
+        """区間の種類に応じて適切なタブに切り替える"""    
+        if hasattr(interval, 'query_result') and interval.query_result:    
+            query_text = interval.query_result.query_text    
+            print(f"DEBUG: switch_to_appropriate_tab called with query: {query_text}")  
             
-            # Stepの区間かどうかを判定  
-            if query_text.startswith("Step:"):  
-                # Step Editタブに切り替え  
-                self.tab_widget.setCurrentIndex(1)  # Step Editタブのインデックス  
-                # クリックされたステップを選択状態にする  
-                self._select_step_by_label(interval.label)  
-            else:  
-                # Action Editタブに切り替え  
+            # Stepの区間かどうかを判定    
+            if query_text.startswith("Step:"):    
+                print("DEBUG: Switching to Step Edit tab")  
+                # Step Editタブに切り替え    
+                self.tab_widget.setCurrentIndex(1)  # Step Editタブのインデックス    
+                # クリックされたステップを選択状態にする    
+                self._select_step_by_label(interval.label)    
+            else:    
+                print("DEBUG: Switching to Action Edit tab")  
+                # Action Editタブに切り替え    
                 self.tab_widget.setCurrentIndex(0)  # Action Editタブのインデックス
 
     def _select_step_by_label(self, step_label):  
@@ -532,9 +614,11 @@ class IntegratedEditWidget(QWidget):
                 break
 
     def on_action_value_changed(self):  
-        """Action値が変更された時の即時処理"""  
+        """Action値が変更された時の即時処理"""          
         # 少し遅延を入れて連続入力を防ぐ  
         if hasattr(self, '_action_timer'):  
+            if self._action_timer.isActive():  
+                print(f"DEBUG: Stopping existing timer")  
             self._action_timer.stop()  
         
         self._action_timer = QTimer()  
@@ -542,16 +626,21 @@ class IntegratedEditWidget(QWidget):
         self._action_timer.timeout.connect(self.apply_interval_changes)  
         self._action_timer.start(500)  # 500ms後に適用
 
-    def on_step_value_changed(self):  
-        """Step値が変更された時の即時処理"""  
-        # 少し遅延を入れて連続入力を防ぐ  
-        if hasattr(self, '_step_timer'):  
-            self._step_timer.stop()  
+    def on_step_value_changed(self):    
+        """Step値が変更された時の即時処理"""    
+        print("DEBUG: on_step_value_changed called")  
         
-        from PyQt6.QtCore import QTimer  
-        self._step_timer = QTimer()  
-        self._step_timer.setSingleShot(True)  
-        self._step_timer.timeout.connect(self.apply_step_changes)  
+        # 少し遅延を入れて連続入力を防ぐ    
+        if hasattr(self, '_step_timer'):    
+            if self._step_timer.isActive():  
+                print("DEBUG: Stopping existing step timer")  
+            self._step_timer.stop()    
+        
+        print("DEBUG: Starting new step timer (500ms)")  
+        from PyQt6.QtCore import QTimer    
+        self._step_timer = QTimer()    
+        self._step_timer.setSingleShot(True)    
+        self._step_timer.timeout.connect(self.apply_step_changes)    
         self._step_timer.start(500)  # 500ms後に適用
 
     def _restore_step_selection(self, step_text, original_index):  

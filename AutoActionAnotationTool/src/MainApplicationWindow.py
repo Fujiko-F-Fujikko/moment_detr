@@ -398,9 +398,16 @@ class MainApplicationWindow(QMainWindow):
       
     def on_timeline_interval_clicked(self, interval, query_result):    
         """タイムライン上の区間がクリックされた時の処理（統合編集ウィジェット対応）"""    
-        # 統合編集ウィジェットに選択された区間を設定  
-        self.integrated_edit_widget.set_current_query_results(query_result)  
-          
+        print(f"DEBUG: Timeline interval clicked - query_text: {query_result.query_text}")  
+        
+        # Stepかどうかを判定  
+        if hasattr(query_result, 'query_text') and query_result.query_text.startswith("Step:"):  
+            print("DEBUG: This is a Step interval click")  
+            self.debug_undo_stack("BEFORE Step interval click processing")  
+        
+        # 統合編集ウィジェットに選択された区間を設定    
+        self.integrated_edit_widget.set_current_query_results(query_result)              
+
         # 区間のインデックスを特定  
         if hasattr(query_result, 'relevant_windows'):  
             try:  
@@ -488,7 +495,10 @@ class MainApplicationWindow(QMainWindow):
     def on_interval_drag_finished(self, interval, new_start, new_end):  
         """ドラッグ完了時の処理"""  
         print(f"DEBUG: MainApp - Drag finished: {interval.start_time}-{interval.end_time} -> {new_start}-{new_end}")  
-        
+
+        # デバッグ：変更前のスタック状態  
+        self.debug_undo_stack("BEFORE drag finished")  
+
         # Use the stored original values instead of current values  
         old_start = getattr(self, 'drag_original_start', interval.start_time)  
         old_end = getattr(self, 'drag_original_end', interval.end_time)  
@@ -500,12 +510,16 @@ class MainApplicationWindow(QMainWindow):
             hasattr(interval.query_result, 'query_text') and   
             interval.query_result.query_text.startswith("Step:")):  
             
+            print(f"DEBUG: Creating StepModifyCommand")  
             command = StepModifyCommand(interval, old_start, old_end, new_start, new_end,   
                                     self.stt_data_manager, self.get_current_video_name(), self)  
             self.undo_stack.push(command)  
+            self.debug_undo_stack("AFTER StepModifyCommand")  
         else:  
+            print(f"DEBUG: Creating IntervalModifyCommand")  
             command = IntervalModifyCommand(interval, old_start, old_end, new_start, new_end, self)  
             self.undo_stack.push(command)  
+            self.debug_undo_stack("AFTER IntervalModifyCommand")
         
         # Clean up stored values  
         self.drag_original_start = None  
@@ -566,6 +580,21 @@ class MainApplicationWindow(QMainWindow):
         from IntervalModifyCommand import IntervalAddCommand  
         command = IntervalAddCommand(current_query_result, new_interval, self)  
         self.undo_stack.push(command)
+
+    def debug_undo_stack(self, operation_name=""):  
+        """Undo/Redoスタックの状態をデバッグ出力"""  
+        print(f"\n=== UNDO STACK DEBUG ({operation_name}) ===")  
+        print(f"Stack count: {self.undo_stack.count()}")  
+        print(f"Current index: {self.undo_stack.index()}")  
+        print(f"Can undo: {self.undo_stack.canUndo()}")  
+        print(f"Can redo: {self.undo_stack.canRedo()}")  
+        
+        # スタック内の全コマンドを表示  
+        for i in range(self.undo_stack.count()):  
+            command = self.undo_stack.command(i)  
+            status = "CURRENT" if i == self.undo_stack.index() else "DONE" if i < self.undo_stack.index() else "UNDONE"  
+            print(f"  [{i}] {status}: {command.text()} ({type(command).__name__})")  
+        print("=" * 50)
 
 def parse_arguments():    
     """コマンドライン引数を解析"""    
