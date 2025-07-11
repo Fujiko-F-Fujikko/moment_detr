@@ -38,12 +38,19 @@ class StepModifyCommand(QUndoCommand):
                     step.segment_frames = [int(start_time * fps), int(end_time * fps)]  
                     break  
       
-    def _update_ui(self):  
-        if self.main_window:  
-            self.main_window.update_display()  
-        # IntegratedEditWidgetのUIも更新  
-        if hasattr(self.main_window, 'integrated_edit_widget'):  
-            self.main_window.integrated_edit_widget.update_interval_ui()  
+    def _update_ui(self):    
+        if self.main_window:    
+            self.main_window.update_display()    
+            if hasattr(self.main_window, 'integrated_edit_widget'):    
+                # リストを更新  
+                self.main_window.integrated_edit_widget.refresh_step_list()  
+                
+                # 選択状態を復元  
+                self.main_window.integrated_edit_widget._restore_step_selection(  
+                    self.interval.label, None  
+                )  
+                
+                self.main_window.integrated_edit_widget.update_interval_ui()
 
 class StepAddCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_text, segment, main_window, description="Add Step"):  
@@ -70,13 +77,16 @@ class StepAddCommand(QUndoCommand):
                 video_data.steps.remove(self.step_entry)  
         self._update_ui()  
       
-    def _update_ui(self):  
-        if self.main_window:  
-            self.main_window.update_display()  
-            self.main_window.integrated_edit_widget.refresh_step_list()  
-        # IntegratedEditWidgetのStep編集フィールドも更新  
-        if hasattr(self.main_window, 'integrated_edit_widget'):  
-            self.main_window.integrated_edit_widget._update_step_edit_ui()  
+    def _update_ui(self):    
+        if self.main_window:    
+            self.main_window.update_display()    
+            if hasattr(self.main_window, 'integrated_edit_widget'):    
+                self.main_window.integrated_edit_widget.refresh_step_list()  
+                # StepAddCommandでは step_text を使用  
+                self.main_window.integrated_edit_widget._restore_step_selection(  
+                    self.step_text, len(self.main_window.integrated_edit_widget.step_list) - 1  
+                )  
+                self.main_window.integrated_edit_widget.update_interval_ui()
 
 class StepDeleteCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_index, main_window, description="Delete Step"):  
@@ -101,13 +111,13 @@ class StepDeleteCommand(QUndoCommand):
             video_data.steps.insert(self.step_index, self.deleted_step)  
         self._update_ui()  
       
-    def _update_ui(self):  
-        if self.main_window:  
-            self.main_window.update_display()  
-            self.main_window.integrated_edit_widget.refresh_step_list()  
-        # IntegratedEditWidgetのStep編集フィールドも更新  
-        if hasattr(self.main_window, 'integrated_edit_widget'):  
-            self.main_window.integrated_edit_widget._update_step_edit_ui()  
+    def _update_ui(self):    
+        if self.main_window:    
+            self.main_window.update_display()    
+            if hasattr(self.main_window, 'integrated_edit_widget'):    
+                self.main_window.integrated_edit_widget.refresh_step_list()  
+                # StepDeleteCommandでは削除後なので選択復元は不要  
+                self.main_window.integrated_edit_widget.update_interval_ui()
 
 class StepTextModifyCommand(QUndoCommand):  
     def __init__(self, stt_data_manager, video_name, step_index, old_text, new_text, main_window, description="Modify Step Text"):  
@@ -133,9 +143,16 @@ class StepTextModifyCommand(QUndoCommand):
             if self.step_index < len(video_data.steps):  
                 video_data.steps[self.step_index].step = text  
       
-    def _update_ui(self):  
-        if self.main_window:  
-            self.main_window.update_display()  
-        # IntegratedEditWidgetのUIも更新  
-        if hasattr(self.main_window, 'integrated_edit_widget'):  
-            self.main_window.integrated_edit_widget.update_interval_ui()
+    def _update_ui(self):    
+        if self.main_window:    
+            self.main_window.update_display()    
+            if hasattr(self.main_window, 'integrated_edit_widget'):    
+                # リストを更新  
+                self.main_window.integrated_edit_widget.refresh_step_list()  
+                
+                # 選択状態を復元  
+                self.main_window.integrated_edit_widget._restore_step_selection(  
+                    self.new_text, self.step_index  
+                )  
+                
+                self.main_window.integrated_edit_widget.update_interval_ui()
