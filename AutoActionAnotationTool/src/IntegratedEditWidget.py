@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                             QComboBox, QLineEdit, QPushButton, QGroupBox,  
                             QListWidget, QListWidgetItem, QDoubleSpinBox,  
                             QTabWidget, QMessageBox)  
-from PyQt6.QtCore import pyqtSignal, QTimer
+from PyQt6.QtCore import pyqtSignal, QTimer, Qt
 
 from Results import QueryResults, DetectionInterval  
 from TimelineViewer import TimelineViewer
@@ -657,3 +657,48 @@ class IntegratedEditWidget(QWidget):
                 self.step_list.scrollToItem(item, QListWidget.ScrollHint.PositionAtCenter)  
                 self.on_step_selected(item)  
                 break
+
+    def keyPressEvent(self, event):  
+        """統合編集ウィジェットのキーイベント処理"""  
+        if event.key() == Qt.Key.Key_Tab:  
+            # タブ内でのフォーカス移動  
+            current_tab = self.tab_widget.currentIndex()  
+            if current_tab == 0:  # Action Edit  
+                self._focus_next_action_widget()  
+            elif current_tab == 1:  # Step Edit  
+                self._focus_next_step_widget()  
+            event.accept()  
+        elif event.key() == Qt.Key.Key_Return:  
+            # Enterキーでの決定処理  
+            self._handle_enter_key()  
+            event.accept()  
+        else:  
+            super().keyPressEvent(event)  
+    
+    def _focus_next_action_widget(self):  
+        """Action Editタブ内でのフォーカス移動"""  
+        focus_order = [  
+            self.start_spinbox, self.end_spinbox, self.hand_combo,  
+            self.action_verb_edit, self.manipulated_object_edit,  
+            self.target_object_edit, self.tool_edit,  
+            self.add_button, self.delete_button  
+        ]  
+        current_widget = self.focusWidget()  
+        try:  
+            current_index = focus_order.index(current_widget)  
+            next_index = (current_index + 1) % len(focus_order)  
+            focus_order[next_index].setFocus()  
+        except ValueError:  
+            focus_order[0].setFocus()  
+    
+    def _handle_enter_key(self):  
+        """Enterキーでの決定処理"""  
+        focused_widget = self.focusWidget()  
+        if focused_widget == self.add_button:  
+            self.add_new_interval()  
+        elif focused_widget == self.delete_button:  
+            self.delete_interval()  
+        elif focused_widget == self.add_step_btn:  
+            self.add_step()  
+        elif focused_widget == self.delete_step_btn:  
+            self.delete_step()
