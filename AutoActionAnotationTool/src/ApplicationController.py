@@ -8,7 +8,6 @@ from VideoInfo import VideoInfo
 from DetectionInterval import DetectionInterval
 from Results import QueryResults
 from DataHandling import InferenceResultsLoader, InferenceResultsSaver
-from SaliencyFilter import SaliencyFilter
 
 class ApplicationController(QObject):  
     def __init__(self):  
@@ -20,7 +19,6 @@ class ApplicationController(QObject):
         # Components  
         self.loader = InferenceResultsLoader()  
         self.saver = InferenceResultsSaver()  
-        self.saliency_filter = SaliencyFilter()  
           
     def load_video(self, video_path: str) -> VideoInfo:  
         """Load video and extract metadata"""  
@@ -52,31 +50,7 @@ class ApplicationController(QObject):
             return []  
           
         return self.inference_results.get_results_for_video(self.video_info.video_id)  
-      
-    def apply_saliency_filter(self, threshold: float) -> List[QueryResults]:  
-        """Apply saliency filtering to current results"""  
-        self.saliency_filter.threshold = threshold  
-        filtered_results = []  
-          
-        for query_result in self.get_results_for_current_video():  
-            # Filter intervals by confidence  
-            filtered_intervals = [  
-                interval for interval in query_result.relevant_windows  
-                if interval.confidence_score >= threshold  
-            ]  
-              
-            # Create new QueryResults with filtered intervals  
-            filtered_result = QueryResults(  
-                query_result.query_id,  
-                query_result.query_text,  
-                query_result.video_id,  
-                filtered_intervals,  
-                query_result.saliency_scores  
-            )  
-            filtered_results.append(filtered_result)  
-          
-        return filtered_results  
-  
+        
 class IntervalModificationController(QObject):  
     intervalChanged = pyqtSignal(DetectionInterval, DetectionInterval)  
       
@@ -107,13 +81,7 @@ class FilterController(QObject):
         super().__init__()  
         self.app_controller = app_controller  
         self.confidence_threshold = 0.1  
-        self.saliency_threshold = 0.0  
       
     def set_confidence_threshold(self, threshold: float):  
         self.confidence_threshold = threshold  
         self.filtersChanged.emit()  
-      
-    def set_saliency_threshold(self, threshold: float):  
-        self.saliency_threshold = threshold  
-        self.app_controller.saliency_filter.threshold = threshold  
-        self.filtersChanged.emit()
