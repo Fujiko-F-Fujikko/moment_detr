@@ -12,7 +12,8 @@ class TimelineViewer(QWidget):
     timePositionChanged = pyqtSignal(float)  
     intervalDragStarted = pyqtSignal(DetectionInterval)  
     intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  # interval, new_start, new_end  
-    intervalDragFinished = pyqtSignal(DetectionInterval, float, float)       
+    intervalDragFinished = pyqtSignal(DetectionInterval, float, float) 
+    newIntervalCreated = pyqtSignal(float, float)       
     def __init__(self):  
         super().__init__()  
         # マウストラッキングを有効にする  
@@ -29,6 +30,7 @@ class TimelineViewer(QWidget):
 
         # ドラッグ関連の状態管理を追加  
         self.is_dragging = False  
+        self.is_creating_new_interval = False
         self.dragging_interval = None  
         self.drag_start_pos = None  
         self.drag_start_time = None  
@@ -134,6 +136,12 @@ class TimelineViewer(QWidget):
               
             print(f"DEBUG: Drag started - mode: {self.drag_mode}, interval: {clicked_interval.start_time}-{clicked_interval.end_time}")  
             return  
+        else:  
+            # 空白領域での新規区間作成開始  
+            self.is_creating_new_interval = True  
+            self.new_interval_start_time = click_time  
+            self.new_interval_start_pos = click_x  
+            self.setCursor(QCursor(Qt.CursorShape.CrossCursor))
               
         # 区間外のクリックの場合は既存の処理  
         self.timePositionChanged.emit(click_time)  
@@ -174,6 +182,14 @@ class TimelineViewer(QWidget):
         return True  # 重複なし  
 
     def mouseMoveEvent(self, event):  
+
+        # 新規区間作成中の処理
+        if self.is_creating_new_interval:  
+            current_time = (event.position().x() / self.width()) * self.video_duration  
+            self.new_interval_end_time = max(current_time, self.new_interval_start_time + 0.1)  
+            self.update()  # プレビュー表示のため再描画  
+            return  
+
         # ホバー中の処理
         if not self.is_dragging:  
             # 現在ホバーしている区間を特定  
@@ -244,23 +260,28 @@ class TimelineViewer(QWidget):
             self.setCursor(QCursor(Qt.CursorShape.ForbiddenCursor))
   
     def mouseReleaseEvent(self, event):  
-        if not self.is_dragging or not self.dragging_interval:  
-            return  
-              
-        # ドラッグ終了処理  
-        final_time = (event.position().x() / self.width()) * self.video_duration  
-          
-        # 最終的な開始・終了時間を計算  
-        new_start = self.dragging_interval.start_time  
-        new_end = self.dragging_interval.end_time  
-          
-        print(f"DEBUG: Drag finished - mode: {self.drag_mode}, new interval: {new_start}-{new_end}")  
-          
-        # ドラッグ終了シグナルを発火  
-        self.intervalDragFinished.emit(self.dragging_interval, new_start, new_end)  
-          
+
+        # 新規区間作成中の処理
+        if self.is_creating_new_interval:  
+            if hasattr(self, 'new_interval_end_time'):  
+                # 新規区間作成シグナルを発火  
+                self.newIntervalCreated.emit(self.new_interval_start_time, self.new_interval_end_time)  
+        elif self.is_dragging and self.dragging_interval is not None:
+            # 最終的な開始・終了時間を計算  
+            new_start = self.dragging_interval.start_time  
+            new_end = self.dragging_interval.end_time  
+            
+            print(f"DEBUG: Drag finished - mode: {self.drag_mode}, new interval: {new_start}-{new_end}")  
+            
+            # ドラッグ終了シグナルを発火  
+            self.intervalDragFinished.emit(self.dragging_interval, new_start, new_end)  
+        else:
+            # ドラッグが終了したが、区間がない場合は何もしない  
+            print("DEBUG: mouseReleaseEvent  but nothing to do...")
+
         # ドラッグ状態をリセット  
         self.is_dragging = False  
+        self.is_creating_new_interval = False
         self.dragging_interval = None  
         self.drag_start_pos = None  
         self.drag_start_time = None  
