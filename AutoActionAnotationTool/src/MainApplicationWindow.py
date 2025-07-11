@@ -5,6 +5,7 @@ from pathlib import Path
   
 from PyQt6.QtWidgets import QMainWindow, QWidget, QApplication, QFileDialog, QMessageBox, QDialog
 from PyQt6.QtGui import QAction, QUndoStack, QAction, QKeySequence
+from PyQt6.QtCore import Qt
   
 from MultiTimelineViewer import MultiTimelineViewer  
 from ApplicationController import ApplicationController, FilterController  
@@ -184,12 +185,14 @@ class MainApplicationWindow(QMainWindow):
         
         # Undoアクション  
         undo_action = self.undo_stack.createUndoAction(self, "Undo")  
-        undo_action.setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z  
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z 
+        undo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut) 
         edit_menu.addAction(undo_action)  
         
         # Redoアクション    
         redo_action = self.undo_stack.createRedoAction(self, "Redo")  
-        redo_action.setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Y  
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Y 
+        redo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut) 
         edit_menu.addAction(redo_action)  
         
         edit_menu.addSeparator()  
