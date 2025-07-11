@@ -10,6 +10,7 @@ from TimelineViewer import TimelineViewer
 from IntervalModifyCommand import IntervalModifyCommand, IntervalDeleteCommand, IntervalAddCommand
 from StepModifyCommand import StepModifyCommand, StepDeleteCommand, StepAddCommand, StepTextModifyCommand
 from ActionEditCommand import ActionDetailModifyCommand
+from STTDataStructures import QueryParser  
 
   
 class IntegratedEditWidget(QWidget):  
@@ -229,21 +230,25 @@ class IntegratedEditWidget(QWidget):
               
             # クエリから手の種類とアクション要素を推定  
             if self.current_query_result:  
-                try:  
-                    from STTDataStructures import QueryParser  
-                    hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
-                      
-                    # 手の種類を設定  
-                    hand_mapping = {"LeftHand": "left_hand", "RightHand": "right_hand", "BothHands": "both_hands", "None": "unspecified"}  
-                    self.hand_combo.setCurrentText(hand_mapping.get(hand_type, "unspecified"))  
-                      
-                    # アクション要素を設定  
-                    self.action_verb_edit.setText(action_data.action_verb or "")  
-                    self.manipulated_object_edit.setText(action_data.manipulated_object or "")  
-                    self.target_object_edit.setText(action_data.target_object or "")  
-                    self.tool_edit.setText(action_data.tool or "")  
-                except:  
+                # Stepクエリの場合は検証をスキップ  
+                if self.current_query_result.query_text.startswith("Step:"):  
+                    # Stepの場合は手の種類とアクション要素の設定をスキップ  
                     pass  
+                else:
+                    try:  
+                        hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
+                        
+                        # 手の種類を設定  
+                        hand_mapping = {"LeftHand": "left_hand", "RightHand": "right_hand", "BothHands": "both_hands", "None": "unspecified"}  
+                        self.hand_combo.setCurrentText(hand_mapping.get(hand_type, "unspecified"))  
+                        
+                        # アクション要素を設定  
+                        self.action_verb_edit.setText(action_data.action_verb or "")  
+                        self.manipulated_object_edit.setText(action_data.manipulated_object or "")  
+                        self.target_object_edit.setText(action_data.target_object or "")  
+                        self.tool_edit.setText(action_data.tool or "")  
+                    except:  
+                        pass  
         else:  
             self.start_spinbox.setValue(0.0)  
             self.end_spinbox.setValue(0.0)  

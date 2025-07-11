@@ -13,7 +13,7 @@ class TimelineViewer(QWidget):
     intervalDragStarted = pyqtSignal(DetectionInterval)  
     intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  # interval, new_start, new_end  
     intervalDragFinished = pyqtSignal(DetectionInterval, float, float) 
-    newIntervalCreated = pyqtSignal(float, float)       
+    newIntervalCreated = pyqtSignal(float, float)  # start_time, end_time
     def __init__(self):  
         super().__init__()  
         # マウストラッキングを有効にする  
@@ -72,6 +72,10 @@ class TimelineViewer(QWidget):
         for interval in self.intervals:  
             self.draw_interval(painter, rect, interval)  
         
+        # Draw new interval preview
+        if self.is_creating_new_interval and hasattr(self, 'new_interval_end_time'):  
+            self.draw_new_interval_preview(painter, rect)  
+
         # Draw current position  
         self.draw_current_position(painter, rect)
       
@@ -442,3 +446,21 @@ class TimelineViewer(QWidget):
         if self.highlighted_interval == interval:  
             self.highlighted_interval = None  
             self.update()
+
+    def draw_new_interval_preview(self, painter: QPainter, rect: QRect):  
+        """新規区間作成中のプレビューを描画"""  
+        start_x = rect.width() * self.new_interval_start_time / self.video_duration  
+        end_x = rect.width() * self.new_interval_end_time / self.video_duration  
+        width = end_x - start_x  
+        
+        # プレビュー用の半透明色（緑色）  
+        preview_color = QColor(0, 255, 0, 100)  # 半透明の緑  
+        border_color = QColor(0, 200, 0, 200)   # 濃い緑の境界線  
+        
+        # プレビューボックスを描画  
+        painter.fillRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20, preview_color)  
+        
+        # 点線の境界線を描画  
+        pen = QPen(border_color, 2, Qt.PenStyle.DashLine)  
+        painter.setPen(pen)  
+        painter.drawRect(int(start_x), rect.top() + 10, int(width), rect.height() - 20)

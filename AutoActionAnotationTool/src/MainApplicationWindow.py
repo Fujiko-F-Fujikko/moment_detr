@@ -13,6 +13,7 @@ from ResultsManager import ResultsManager
 from FileManager import FileManager  
 from UILayoutManager import UILayoutManager  
 from TimelineViewer import TimelineViewer
+from STTDataStructures import VideoData
 from IntervalModifyCommand import IntervalModifyCommand
 from StepModifyCommand import StepModifyCommand
   
@@ -150,6 +151,7 @@ class MainApplicationWindow(QMainWindow):
         self.multi_timeline_viewer.intervalDragStarted.connect(self.on_interval_drag_started)  
         self.multi_timeline_viewer.intervalDragMoved.connect(self.on_interval_drag_moved)  
         self.multi_timeline_viewer.intervalDragFinished.connect(self.on_interval_drag_finished)  
+        self.multi_timeline_viewer.newIntervalCreated.connect(self.on_new_interval_created)
 
     def setup_menus(self):    
         """メニューバーの設定"""    
@@ -509,7 +511,62 @@ class MainApplicationWindow(QMainWindow):
         self.drag_original_start = None  
         self.drag_original_end = None  
         self.dragging_interval = None
+
+    def on_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
+        """新規区間作成時の処理"""  
+        print(f"DEBUG: MainApp - New interval created: {start_time}-{end_time} on {timeline_type} timeline")  
+        
+        # タイムライン種別に応じて適切なクエリ結果を選択  
+        current_query_result = None  
+        
+        if timeline_type == "Steps":  
+            # Stepsタイムラインの場合の処理  
+            video_name = self.get_current_video_name()  
+            if not video_name or not self.stt_data_manager:  
+                print("DEBUG: No video or STT data manager available for step creation")  
+                return  
             
+            # デフォルトのステップテキストを生成  
+            step_text = f"New Step {len(self.stt_data_manager.stt_dataset.database.get(video_name, VideoData()).steps) + 1}"  
+            segment = [start_time, end_time]  
+            
+            # StepAddCommandを使用してUndo/Redo対応で追加  
+            from StepModifyCommand import StepAddCommand  
+            command = StepAddCommand(self.stt_data_manager, video_name, step_text, segment, self)  
+            self.undo_stack.push(command)  
+            return  
+        else:  
+            # 手の種類に対応するクエリ結果を検索  
+            all_results = self.results_manager.get_all_results()  
+            for result in all_results:  
+                try:  
+                    from STTDataStructures import QueryParser  
+                    hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
+                    if hand_type == timeline_type:  
+                        current_query_result = result  
+                        break  
+                except:  
+                    continue  
+        
+        if not current_query_result:  
+            print(f"DEBUG: No query result found for timeline type: {timeline_type}")  
+            return  
+        
+        # 新しい区間を作成  
+        from DetectionInterval import DetectionInterval  
+        new_interval = DetectionInterval(  
+            start_time=start_time,  
+            end_time=end_time,  
+            confidence_score=1.0,  
+            query_id=current_query_result.query_id  
+        )  
+        new_interval.query_result = current_query_result  
+        
+        # Undoコマンドを作成してスタックにプッシュ  
+        from IntervalModifyCommand import IntervalAddCommand  
+        command = IntervalAddCommand(current_query_result, new_interval, self)  
+        self.undo_stack.push(command)
+
 def parse_arguments():    
     """コマンドライン引数を解析"""    
     parser = argparse.ArgumentParser(description='Moment-DETR Video Annotation Viewer')    

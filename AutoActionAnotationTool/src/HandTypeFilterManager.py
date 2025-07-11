@@ -33,6 +33,11 @@ class HandTypeFilterManager(QObject):
     
         filtered_results = []  
         for result in self.all_results:  
+            # Stepクエリの場合は検証をスキップ  
+            if result.query_text.startswith("Step:"):  
+                if self.current_filter == "Other":  
+                    filtered_results.append(result)  
+                continue  
             try:  
                 hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
                 print(f"DEBUG: Query '{result.query_text}' -> hand_type: {hand_type}")  
@@ -62,6 +67,10 @@ class HandTypeFilterManager(QObject):
         }  
           
         for result in self.all_results:  
+            # Stepクエリの場合は検証をスキップ  
+            if result.query_text.startswith("Step:"):  
+                groups["Other"].append(result)  
+                continue
             try:  
                 hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
                 if hand_type == "LeftHand":  

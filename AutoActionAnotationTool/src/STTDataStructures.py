@@ -117,6 +117,9 @@ class QueryParser:
     @staticmethod  
     def detect_hand_type(query_text: str) -> str:  
         """クエリから手の種類を推定（新形式対応）"""  
+        # Stepクエリの場合は検証をスキップ  
+        if query_text.startswith("Step:"):  
+            return 'unspecified'
         try:  
             hand_type, _ = QueryParser.validate_and_parse_query(query_text)  
             if hand_type == 'LeftHand':  

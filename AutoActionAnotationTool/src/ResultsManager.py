@@ -137,6 +137,10 @@ class ResultsManager(QObject):
         }  
           
         for result in results:  
+            # Stepクエリの場合は検証をスキップ  
+            if result.query_text.startswith("Step:"):  
+                groups["Other"].append(result)  
+                continue 
             try:  
                 hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
                 if hand_type == "LeftHand":  

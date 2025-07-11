@@ -11,6 +11,7 @@ class MultiTimelineViewer(QWidget):
     intervalDragStarted = pyqtSignal(DetectionInterval)  
     intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  
     intervalDragFinished = pyqtSignal(DetectionInterval, float, float)  
+    newIntervalCreated = pyqtSignal(float, float, str)  # start_time, end_time, timeline_type
 
     def __init__(self):    
         super().__init__()    
@@ -120,6 +121,10 @@ class MultiTimelineViewer(QWidget):
         timeline.intervalDragStarted.connect(self.intervalDragStarted.emit)  
         timeline.intervalDragMoved.connect(self.intervalDragMoved.emit)  
         timeline.intervalDragFinished.connect(self.intervalDragFinished.emit)
+        # 各タイムラインでの接続時にタイムライン種別を渡す
+        timeline.newIntervalCreated.connect(  
+            lambda start, end: self.newIntervalCreated.emit(start, end, hand_type)  
+        )          
 
         return container  
   
@@ -221,6 +226,10 @@ class MultiTimelineViewer(QWidget):
         timeline.intervalDragStarted.connect(self.intervalDragStarted.emit)  
         timeline.intervalDragMoved.connect(self.intervalDragMoved.emit)  
         timeline.intervalDragFinished.connect(self.intervalDragFinished.emit) 
+        # 各タイムラインでの接続時にタイムライン種別を渡す 
+        timeline.newIntervalCreated.connect(  
+            lambda start, end: self.newIntervalCreated.emit(start, end, "Steps")  
+        )
 
         # Steps一覧表示（データがある場合のみ）  
         if step_intervals:  
