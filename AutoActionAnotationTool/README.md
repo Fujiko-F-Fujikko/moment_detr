@@ -22,4 +22,5 @@ pip install -r requirements.txt
 
 ```cmd
 python AutoActionAnotationTool/src/MainApplicationWindow.py --video run_on_video/example/RoripwjYFp8_60.0_210.0.mp4 --json AutoActionAnotationTool/sample_data/dummy_stt_json.json  
+python AutoActionAnotationTool/src/refactor/MainApplicationWindow.py --video run_on_video/example/RoripwjYFp8_60.0_210.0.mp4 --results AutoActionAnotationTool/sample_data/dummy_stt_json.json  
 ```
