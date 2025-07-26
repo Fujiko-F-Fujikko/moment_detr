@@ -56,27 +56,29 @@ class FileManager(QObject):
                 self.resultsLoaded.emit(file_path)  
                 return file_path  
           
-        return None  
-          
-    def save_results_dialog(self, parent=None) -> Optional[str]:  
-        """結果保存ダイアログ"""  
-        start_dir = self.last_results_directory or ""  
-          
-        file_path, _ = QFileDialog.getSaveFileName(  
-            parent,   
-            "Save Results",   
-            start_dir,  
-            "JSON Files (*.json);;JSONL Files (*.jsonl);;All Files (*)"  
-        )  
-          
-        if file_path:  
-            self.last_results_directory = str(Path(file_path).parent)  
+        return None
+
+    def save_results_dialog(self, parent=None, default_name: str = "") -> Optional[str]:
+        """結果保存ダイアログ"""
+        start_dir = self.last_results_directory or ""
+        default_path = str(Path(start_dir) / default_name)
+
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            parent,
+            "Save Results",
+            default_path,
+            "JSON Files (*.json);;JSONL Files (*.jsonl);;All Files (*)"
+        )
+
+        if file_path:
+            self.last_results_directory = str(Path(file_path).parent)
             self.resultsSaved.emit(file_path)  
             return file_path  
           
         return None  
       
-    def export_stt_dataset_dialog(self, parent=None, default_name: str = "stt_dataset.json") -> Optional[str]:  
+    def export_stt_dataset_dialog(self, parent=None, default_name: str = "") -> Optional[str]:  
         """STTデータセットエクスポートダイアログ"""  
         start_dir = self.last_export_directory or ""  
         default_path = str(Path(start_dir) / default_name) if start_dir else default_name  
@@ -223,7 +225,7 @@ class FileManager(QObject):
             reply = QMessageBox.question(  
                 parent,  
                 "File Exists",  
-                f"File already exists: {path.name}\\nDo you want to overwrite it?",  
+                f"File already exists: {path.name}\nDo you want to overwrite it?",  
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,  
                 QMessageBox.StandardButton.No  
             )  
@@ -236,7 +238,7 @@ class FileManager(QObject):
         QMessageBox.information(  
             parent,   
             "Success",   
-            f"File saved successfully:\\n{file_path}"  
+            f"File saved successfully:\n{file_path}"  
         )  
           
     def show_save_error_message(self, error_message: str, parent=None):  
@@ -244,7 +246,7 @@ class FileManager(QObject):
         QMessageBox.critical(  
             parent,   
             "Save Error",   
-            f"Failed to save file:\\n{error_message}"  
+            f"Failed to save file:\n{error_message}"  
         )  
           
     def show_load_error_message(self, error_message: str, parent=None):  
@@ -252,7 +254,7 @@ class FileManager(QObject):
         QMessageBox.critical(  
             parent,   
             "Load Error",   
-            f"Failed to load file:\\n{error_message}"  
+            f"Failed to load file:\n{error_message}"  
         )  
           
     def show_no_results_warning(self, parent=None):  
@@ -260,7 +262,7 @@ class FileManager(QObject):
         QMessageBox.warning(  
             parent,   
             "No Data",   
-            "No results to save!\\nPlease load inference results first."  
+            "No results to save!\nPlease load inference results first."  
         )  
       
     def show_error_message(self, message: str, title: str = "Error", parent=None):  
