@@ -59,9 +59,37 @@ class STTDataset:
     step_categories: List[StepCategory] = field(default_factory=list)  
     
 class QueryValidationError(Exception):  
-    """クエリ形式が不正な場合の例外"""  
-    pass  
-  
+    """クエリ検証エラー"""  
+      
+    def __init__(self, message: str, query_text: str = None, error_type: str = None):  
+        super().__init__(message)  
+        self.query_text = query_text  
+        self.error_type = error_type  
+        self.message = message  
+      
+    def __str__(self):  
+        if self.query_text:  
+            return f"Query validation error for '{self.query_text}': {self.message}"  
+        return f"Query validation error: {self.message}"  
+      
+    @classmethod  
+    def invalid_format(cls, query_text: str, expected_parts: int, actual_parts: int):  
+        """フォーマットエラー用のファクトリメソッド"""  
+        message = f"クエリ形式が不正です。{expected_parts}つの要素が必要ですが、{actual_parts}個の要素が見つかりました"  
+        return cls(message, query_text, "invalid_format")  
+      
+    @classmethod  
+    def invalid_hand_type(cls, query_text: str, hand_type: str, valid_types: set):  
+        """手の種類エラー用のファクトリメソッド"""  
+        message = f"不正な手の種類です: '{hand_type}'. 許可される値: {valid_types}"  
+        return cls(message, query_text, "invalid_hand_type")  
+      
+    @classmethod  
+    def empty_field(cls, query_text: str, field_name: str, field_index: int):  
+        """空フィールドエラー用のファクトリメソッド"""  
+        message = f"要素{field_index}({field_name})が空文字列です。'None'を使用してください"  
+        return cls(message, query_text, "empty_field")  
+
 class QueryParser:  
     # 許可される手の種類  
     VALID_HAND_TYPES = {'LeftHand', 'RightHand', 'BothHands', 'None'}  

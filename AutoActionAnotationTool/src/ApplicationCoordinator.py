@@ -2,12 +2,17 @@
 from PyQt6.QtCore import QObject, pyqtSignal  
 from typing import Optional, Dict, Any  
   
+from VideoPlayerController import VideoPlayerController
 from VideoDataController import VideoDataController  
 from ResultsDataController import ResultsDataController  
 from STTDataController import STTDataController  
 from TimelineDisplayManager import TimelineDisplayManager  
 from EditWidgetManager import EditWidgetManager  
-from Results import DetectionInterval  
+from Results import DetectionInterval, QueryResults
+from ResultsDisplayManager import ResultsDisplayManager
+from Utilities import show_call_stack  # デバッグ用スタックトレース表示
+from STTDataStructures import QueryParser, QueryValidationError
+from EditCommandFactory import EditCommandFactory
   
 class ApplicationCoordinator(QObject):  
     """コンポーネント間の調整とイベント処理を担当するクラス"""  
@@ -16,7 +21,6 @@ class ApplicationCoordinator(QObject):
     videoLoaded = pyqtSignal(str)  # video_path  
     resultsLoaded = pyqtSignal(list)  # List[QueryResults]  
     dataChanged = pyqtSignal()  
-    intervalSelected = pyqtSignal(object, int)  # interval, index  
       
     def __init__(self, main_window=None):  
         super().__init__()  
@@ -30,11 +34,14 @@ class ApplicationCoordinator(QObject):
         # UI管理コンポーネント  
         self.timeline_display_manager: Optional[TimelineDisplayManager] = None  
         self.edit_widget_manager: Optional[EditWidgetManager] = None  
-        self.video_player_controller: Optional[VideoDataController] = None  
+        self.video_player_controller: Optional[VideoPlayerController] = None  
           
         # 状態管理  
         self.current_video_path: Optional[str] = None  
         self.current_query_results: list = []  
+
+        # コマンドファクトリー
+        self.command_factory = EditCommandFactory(main_window) if main_window else None
           
         self.setup_connections()  
       
@@ -48,11 +55,13 @@ class ApplicationCoordinator(QObject):
       
     def set_ui_components(self, timeline_display_manager: TimelineDisplayManager,  
                          edit_widget_manager: EditWidgetManager,  
-                         video_player_controller: VideoDataController):  
+                         video_player_controller: VideoPlayerController,
+                         results_display_manager: ResultsDisplayManager):  
         """UI管理コンポーネントを設定"""  
         self.timeline_display_manager = timeline_display_manager  
         self.edit_widget_manager = edit_widget_manager  
         self.video_player_controller = video_player_controller  
+        self.results_display_manager = results_display_manager
           
         # UI コンポーネントのシグナル接続  
         self._connect_ui_signals()  
@@ -172,18 +181,20 @@ class ApplicationCoordinator(QObject):
         """推論結果を読み込み"""  
         try:  
             results = self.results_data_controller.load_inference_results(json_path)  
-              
+            
             # STTデータに推論結果を追加  
             video_name = self.video_data_controller.get_video_name()  
             if video_name:  
                 self.stt_data_controller.add_inference_results(video_name, results)  
-              
+            
             self.current_query_results = results  
+            
+            # シグナル発信（修正：結果を引数として渡す）  
             self.resultsLoaded.emit(results)  
-              
+            
             # コンポーネント同期  
             self.synchronize_components()  
-              
+                        
         except Exception as e:  
             print(f"Failed to load inference results: {e}")  
       
@@ -196,44 +207,55 @@ class ApplicationCoordinator(QObject):
         """結果読み込み完了時の処理"""  
         self.current_query_results = results  
         self.synchronize_components()  
-      
+    
     def handle_results_filtered(self, filtered_results):  
         """結果フィルタリング時の処理"""  
         if self.timeline_display_manager:  
             video_name = self.video_data_controller.get_video_name()  
             self.timeline_display_manager.set_query_results(  
                 filtered_results, self.stt_data_controller, video_name  
-            )  
+            )
       
     def handle_dataset_updated(self):  
         """データセット更新時の処理"""  
         self.synchronize_components()  
         self.dataChanged.emit()  
       
-    def handle_timeline_interval_clicked(self, interval: DetectionInterval, query_result):  
+    def handle_timeline_interval_clicked(self, interval: DetectionInterval, query_result: QueryResults):  
         """タイムライン区間クリック時の処理"""  
-        # 編集ウィジェットに選択を設定  
         if self.edit_widget_manager and query_result:  
+            # クエリのHandTypeを確認  
+            try:  
+                query_hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)  
+            except QueryValidationError:  
+                query_hand_type = "Unknown"  
+            
             self.edit_widget_manager.set_current_query_results(query_result)  
-              
-            # 区間のインデックスを特定  
+            
             if hasattr(query_result, 'relevant_windows'):  
-                try:  
-                    index = query_result.relevant_windows.index(interval)  
+                index = -1  
+                for i, window in enumerate(query_result.relevant_windows):  
+                    if window == interval:
+                        index = i  
+                        break  
+                
+                if index >= 0:  
                     self.edit_widget_manager.set_selected_interval(interval, index)  
-                except ValueError:  
-                    self.edit_widget_manager.set_selected_interval(interval, 0)  
-          
-        # 動画をその位置にシーク  
-        if self.video_player_controller:  
-            self.video_player_controller.seek_to_time(interval.start_time)  
-          
-        # タイムライン上でハイライト  
+                else:  
+                    return
+
+        # Detection Results一覧で対応する項目を選択  
+        if hasattr(self, 'results_display_manager') and self.results_display_manager:  
+            self.results_display_manager.select_interval_in_list(interval)  
+
+        # Timeline上で区間をハイライト（古い実装と同じ順序）  
         if self.timeline_display_manager:  
             self.timeline_display_manager.set_highlighted_interval(interval)  
-          
-        self.intervalSelected.emit(interval, 0)  
-      
+        
+        # 動画をその位置にシーク（古い実装と同じ順序）  
+        if self.video_player_controller:  
+            self.video_player_controller.seek_to_time(interval.start_time)
+
     def handle_interval_drag_started(self, interval: DetectionInterval):  
         """区間ドラッグ開始時の処理"""  
         # 元の値を保存（Undo用）  
@@ -250,58 +272,109 @@ class ApplicationCoordinator(QObject):
             try:  
                 index = interval.query_result.relevant_windows.index(interval)  
                 self.edit_widget_manager.set_selected_interval(interval, index)  
+
+                # Step区間の場合は追加でリアルタイム更新  
+                if (hasattr(interval.query_result, 'query_text') and   
+                    interval.query_result.query_text.startswith("Step:")):  
+                    step_editor = self.edit_widget_manager.get_step_editor()  
+                    if step_editor:  
+                        step_editor.update_interval_realtime(new_start, new_end)  
+
             except ValueError:  
                 pass  
       
     def handle_interval_drag_finished(self, interval: DetectionInterval, new_start: float, new_end: float):  
         """区間ドラッグ完了時の処理"""  
-        # Undo/Redoコマンドを作成  
-        if self.main_window and hasattr(self.main_window, 'undo_stack'):  
+        if self.main_window and hasattr(self.main_window, 'undo_stack') and self.command_factory:  
             old_start = getattr(self.main_window, 'drag_original_start', interval.start_time)  
             old_end = getattr(self.main_window, 'drag_original_end', interval.end_time)  
-              
-            # ステップかアクションかを判定してコマンドを作成  
+            
+            # ステップかアクションかを判定してファクトリー経由でコマンドを作成  
             if (hasattr(interval, 'query_result') and   
                 hasattr(interval.query_result, 'query_text') and   
                 interval.query_result.query_text.startswith("Step:")):  
-                  
-                from StepModifyCommand import StepModifyCommand  
-                command = StepModifyCommand(  
+                
+                self.command_factory.create_and_execute_step_modify(  
                     interval, old_start, old_end, new_start, new_end,  
-                    self.stt_data_controller,   
-                    self.video_data_controller.get_video_name(),   
-                    self.main_window  
+                    self.stt_data_controller, self.video_data_controller.get_video_name()  
                 )  
             else:  
-                from IntervalModifyCommand import IntervalModifyCommand  
-                command = IntervalModifyCommand(  
-                    interval, old_start, old_end, new_start, new_end, self.main_window  
-                )  
-              
-            self.main_window.undo_stack.push(command)  
-      
-    def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
-        """新規区間作成時の処理"""  
-        # 現在のクエリ結果に新しい区間を追加  
-        if self.current_query_results and self.edit_widget_manager:  
-            # 適切なクエリ結果を選択（簡略化）  
-            query_result = self.current_query_results[0] if self.current_query_results else None  
-            if query_result:  
-                new_interval = DetectionInterval(start_time, end_time, 1.0, 0)  
-                new_interval.query_result = query_result  
-                  
-                if self.edit_widget_manager.get_command_factory():  
-                    command = self.edit_widget_manager.get_command_factory().create_interval_add_command(  
-                        query_result, new_interval  
+                self.command_factory.create_and_execute_interval_modify(  
+                    interval, old_start, old_end, new_start, new_end  
+                )
+    
+    def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):    
+        """新規区間作成時の処理"""    
+        if timeline_type == "Steps":    
+            # Step用の新規区間作成処理    
+            video_name = self.video_data_controller.get_video_name()    
+            if video_name and self.stt_data_controller and self.command_factory:    
+                # 新しいステップを作成    
+                if video_name in self.stt_data_controller.stt_dataset.database:    
+                    steps_count = len(self.stt_data_controller.stt_dataset.database[video_name].steps)    
+                    step_text = f"New Step {steps_count + 1}"    
+                else:    
+                    step_text = "New Step 1"    
+                
+                # EditCommandFactoryを使用してUndoコマンドを作成    
+                self.command_factory.create_and_execute_step_add(    
+                    self.stt_data_controller, video_name, step_text, [start_time, end_time]    
+                )    
+        else:  
+            # Action用の新規区間作成処理（修正版）  
+            if self.current_query_results and self.command_factory:  
+                # 現在選択されているIntervalのQueryResultsを優先的に使用  
+                source_query_result = None  
+                
+                # EditWidgetManagerから現在選択されているIntervalを取得  
+                if self.edit_widget_manager:  
+                    action_editor = self.edit_widget_manager.get_action_editor()  
+                    if (action_editor and action_editor.selected_interval and   
+                        hasattr(action_editor.selected_interval, 'query_result')):  
+                        source_query_result = action_editor.selected_interval.query_result  
+                
+                # 選択されているIntervalがない場合は従来の方法  
+                if not source_query_result:  
+                    for query_result in self.current_query_results:  
+                        if timeline_type in query_result.query_text or timeline_type == "RightHand":  
+                            source_query_result = query_result  
+                            break  
+                    
+                    if not source_query_result:  
+                        source_query_result = self.current_query_results[0] if self.current_query_results else None  
+
+                if source_query_result:  
+                    # 独立したQueryResultsを作成  
+                    import copy  
+                    independent_query_result = copy.deepcopy(source_query_result)  
+                    
+                    new_interval = DetectionInterval(start_time, end_time, 1.0, 0)    
+                    # relevant_windowsを空にする 
+                    independent_query_result.relevant_windows = []
+                    new_interval.query_result = independent_query_result    
+
+                    # 新しいQueryResultsをcurrent_query_resultsに追加  
+                    self.current_query_results.append(independent_query_result)
+
+                    # EditCommandFactoryを使用    
+                    self.command_factory.create_and_execute_interval_add(    
+                        independent_query_result, new_interval    
                     )  
-                    self.edit_widget_manager.get_command_factory().execute_command(command)  
-      
+    
+                    # Timeline上でハイライト表示    
+                    if self.timeline_display_manager:    
+                        self.timeline_display_manager.set_highlighted_interval(new_interval)
+
     def handle_time_position_changed(self, time: float):  
         """時間位置変更時の処理"""  
         # タイムライン上でプレイヘッド位置を同期  
         if self.timeline_display_manager:  
             self.timeline_display_manager.update_playhead_position(time)  
-      
+
+        # 動画プレイヤーをseek  
+        if self.video_player_controller:  
+            self.video_player_controller.seek_to_time(time)      
+
     def handle_video_position_changed(self, position: float):  
         """動画位置変更時の処理"""  
         # タイムライン上でプレイヘッド位置を同期  
@@ -316,7 +389,8 @@ class ApplicationCoordinator(QObject):
       
     def handle_interval_updated(self):  
         """区間更新時の処理"""  
-        self.synchronize_timeline_updates()  
+        self.synchronize_timeline_updates() 
+        self.synchronize_components() 
         self.dataChanged.emit()  
       
     def handle_interval_deleted(self):  
@@ -334,8 +408,27 @@ class ApplicationCoordinator(QObject):
         self.synchronize_components()  
         self.dataChanged.emit()  
       
+    def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
+        """ステップセグメント更新の処理"""  
+        video_name = self.video_data_controller.get_video_name()  
+        if video_name and self.stt_data_controller:  
+            # 該当するステップのインデックスを見つける  
+            if video_name in self.stt_data_controller.stt_dataset.database:  
+                video_data = self.stt_data_controller.stt_dataset.database[video_name]  
+                for i, step in enumerate(video_data.steps):  
+                    if step.step == step_text:  
+                        # 既存のmodify_stepメソッドを使用してセグメントを更新  
+                        self.stt_data_controller.modify_step(  
+                            video_name, i, new_segment=new_segment  
+                        )  
+                        break  
+        
+        # コンポーネント同期  
+        self.synchronize_step_updates()
+
     def synchronize_timeline_updates(self):  
         """タイムライン更新の同期"""  
+        #show_call_stack()
         if self.timeline_display_manager:  
             self.timeline_display_manager.update_all_timelines()  
       

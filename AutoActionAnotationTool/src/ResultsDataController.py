@@ -74,7 +74,7 @@ class ResultsDataController(QObject):
         """Hand Type別にフィルタリング"""  
         if hand_type == "All":  
             return results  
-          
+        
         filtered = []  
         for result in results:  
             # Stepクエリの場合は特別処理  
@@ -82,18 +82,18 @@ class ResultsDataController(QObject):
                 if hand_type == "Other":  
                     filtered.append(result)  
                 continue  
-              
+            
             try:  
                 detected_hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
                 if detected_hand_type == hand_type:  
                     filtered.append(result)  
-                elif hand_type == "Other" and detected_hand_type is None:  
+                elif hand_type == "Other" and detected_hand_type == "None":  # 古い実装に合わせて修正  
                     filtered.append(result)  
             except QueryValidationError:  
                 if hand_type == "Other":  
                     filtered.append(result)  
-          
-        return filtered  
+        
+        return filtered
       
     def _filter_by_confidence(self, results: List[QueryResults], threshold: float) -> List[QueryResults]:  
         """信頼度でフィルタリング"""  
@@ -104,18 +104,19 @@ class ResultsDataController(QObject):
                 interval for interval in result.relevant_windows  
                 if interval.confidence_score >= threshold  
             ]  
-              
-            if filtered_intervals:  
-                # 新しいQueryResultsオブジェクトを作成  
-                filtered_result = QueryResults(  
-                    query_id=result.query_id,  
-                    query_text=result.query_text,  
-                    relevant_windows=filtered_intervals,  
-                    saliency_scores=result.saliency_scores  
-                )  
-                filtered_results.append(filtered_result)  
-          
-        return filtered_results  
+            
+            # 新しいQueryResultsオブジェクトを作成（video_idを追加）  
+            # 信頼度閾値を満たす区間がない場合でも、空のQueryResultsを保持
+            filtered_result = QueryResults(  
+                query_text=result.query_text,  
+                video_id=result.video_id,
+                relevant_windows=filtered_intervals, # 空のリストでも保持
+                saliency_scores=result.saliency_scores,  
+                query_id=result.query_id  
+            )  
+            filtered_results.append(filtered_result)  
+        
+        return filtered_results 
       
     def group_results_by_hand_type(self, results: Optional[List[QueryResults]] = None) -> Dict[str, List[QueryResults]]:  
         """結果をHand Type毎にグループ化"""  
@@ -153,31 +154,7 @@ class ResultsDataController(QObject):
     def get_filtered_results(self) -> List[QueryResults]:  
         """フィルタされた結果を取得"""  
         return self.filtered_results  
-      
-    def save_results(self, file_path: str):  
-        """結果を保存"""  
-        inference_results = InferenceResults(  
-            results=self.all_results,  
-            timestamp=None,  
-            model_info={},  
-            video_path=None,  
-            total_queries=len(self.all_results)  
-        )  
-        self.inference_saver.save_to_json(inference_results, file_path)  
-      
-    def update_result(self, updated_result: QueryResults):  
-        """特定の結果を更新"""  
-        for i, result in enumerate(self.all_results):  
-            if result.query_id == updated_result.query_id:  
-                self.all_results[i] = updated_result  
-                break  
-          
-        # フィルタを再適用  
-        self._apply_current_filters()  
-          
-        # シグナル発信  
-        self.resultsUpdated.emit(self.all_results)  
-      
+   
     def is_results_loaded(self) -> bool:  
         """結果が読み込まれているかチェック"""  
         return len(self.all_results) > 0  
@@ -188,3 +165,78 @@ class ResultsDataController(QObject):
         self.filtered_results.clear()  
         self.confidence_threshold = 0.0  
         self.current_hand_type_filter = "All"
+
+    def update_result(self, query_result: QueryResults) -> bool:  
+        """特定の結果を更新"""  
+        try:  
+            # all_resultsから該当する結果を検索して更新  
+            for i, result in enumerate(self.all_results):  
+                if (result.query_text == query_result.query_text and   
+                    result.video_id == query_result.video_id):  
+                    self.all_results[i] = query_result  
+                    break  
+              
+            # フィルタを再適用  
+            self._apply_current_filters()  
+              
+            # シグナル発信  
+            self.resultsUpdated.emit(self.all_results)  
+            return True  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to update result: {str(e)}")  
+      
+    def save_results(self, file_path: str) -> bool:  
+        """結果をファイルに保存"""  
+        try:  
+            inference_results = InferenceResults(  
+                results=self.all_results,  
+                timestamp=None,  
+                model_info={},  
+                video_path=None,  
+                total_queries=len(self.all_results)  
+            )  
+            self.inference_saver.save_to_json(inference_results, file_path)  
+            return True  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to save results: {str(e)}")  
+      
+    def add_result(self, query_result: QueryResults) -> bool:  
+        """新しい結果を追加"""  
+        try:  
+            self.all_results.append(query_result)  
+            self._apply_current_filters()  
+            self.resultsUpdated.emit(self.all_results)  
+            return True  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to add result: {str(e)}")  
+      
+    def remove_result(self, query_id: str) -> bool:  
+        """結果を削除"""  
+        try:  
+            self.all_results = [r for r in self.all_results if r.query_id != query_id]  
+            self._apply_current_filters()  
+            self.resultsUpdated.emit(self.all_results)  
+            return True  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to remove result: {str(e)}")  
+      
+    def get_result_by_id(self, query_id: str) -> Optional[QueryResults]:  
+        """IDで結果を取得"""  
+        for result in self.all_results:  
+            if result.query_id == query_id:  
+                return result  
+        return None  
+      
+    def get_current_state(self) -> Dict:  
+        """現在の状態を取得（デバッグ用）"""  
+        return {  
+            'total_results': len(self.all_results),  
+            'filtered_results': len(self.filtered_results),  
+            'confidence_threshold': self.confidence_threshold,  
+            'hand_type_filter': self.current_hand_type_filter,  
+            'is_loaded': self.is_results_loaded()  
+        }

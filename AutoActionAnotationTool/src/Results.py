@@ -23,11 +23,11 @@ class QueryResults:
         
         # 区間を作成し、クエリ情報を埋め込む  
         intervals = []  
-        for start, end, score in json_data['pred_relevant_windows']:  
+        for i, (start, end, score) in enumerate(json_data['pred_relevant_windows']):  
             interval = DetectionInterval(start, end, score, index)  
             interval.query_result = query_result  # クエリ情報を埋め込み  
-            intervals.append(interval)  
-        
+            interval.interval_id = f"{query_result.query_id}_{i}"  # 新規追加：クエリ内でのインデックス  
+            intervals.append(interval)
         query_result.relevant_windows = intervals  
         return query_result
   

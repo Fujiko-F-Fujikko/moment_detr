@@ -8,7 +8,8 @@ from typing import Optional
 from Results import QueryResults, DetectionInterval  
 from EditCommandFactory import EditCommandFactory  
 from STTDataStructures import QueryParser  
-  
+from Utilities import show_call_stack  # デバッグ用スタックトレース表示
+
 class ActionEditor(QWidget):  
     """アクション編集に特化したエディタークラス"""  
       
@@ -26,25 +27,23 @@ class ActionEditor(QWidget):
         self.selected_interval: Optional[DetectionInterval] = None  
         self.selected_interval_index: int = -1  
           
-        # UI要素  
-        self.start_spinbox: Optional[QDoubleSpinBox] = None  
-        self.end_spinbox: Optional[QDoubleSpinBox] = None  
-        self.confidence_label: Optional[QLabel] = None  
-        self.hand_combo: Optional[QComboBox] = None  
-        self.action_verb_edit: Optional[QLineEdit] = None  
-        self.manipulated_object_edit: Optional[QLineEdit] = None  
-        self.target_object_edit: Optional[QLineEdit] = None  
-        self.tool_edit: Optional[QLineEdit] = None  
-        self.add_button: Optional[QPushButton] = None  
-        self.delete_button: Optional[QPushButton] = None  
-          
         # タイマー（連続入力防止用）  
         self._action_timer: Optional[QTimer] = None  
           
-        self.setup_ui()  
+        # 初期化状態フラグ  
+        self._is_initializing = True  
+        self._signals_connected = False  
+        # 編集状態フラグ
+        self._editing_in_progress = False
+
+        # UIを構築  
+        self._build_ui()  
+          
+        # 初期化完了  
+        self._is_initializing = False  
       
-    def setup_ui(self):  
-        """UIレイアウトの設定"""  
+    def _build_ui(self):  
+        """UI全体を構築"""  
         layout = QVBoxLayout()  
           
         # 区間編集グループ  
@@ -52,26 +51,8 @@ class ActionEditor(QWidget):
         interval_layout = QVBoxLayout()  
           
         # 時間編集セクション  
-        self._create_time_editing_section(interval_layout)  
-          
-        # アクション詳細編集セクション  
-        self._create_action_details_section(interval_layout)  
-          
-        # ボタンセクション  
-        self._create_button_section(interval_layout)  
-          
-        interval_group.setLayout(interval_layout)  
-        layout.addWidget(interval_group)  
-        self.setLayout(layout)  
-          
-        # シグナル接続  
-        self._connect_signals()  
-      
-    def _create_time_editing_section(self, parent_layout: QVBoxLayout):  
-        """時間編集セクションを作成"""  
         time_layout = QHBoxLayout()  
           
-        # 開始・終了時間スピンボックス  
         self.start_spinbox = QDoubleSpinBox()  
         self.start_spinbox.setDecimals(2)  
         self.start_spinbox.setMaximum(9999.99)  
@@ -85,14 +66,13 @@ class ActionEditor(QWidget):
         time_layout.addWidget(QLabel("End:"))  
         time_layout.addWidget(self.end_spinbox)  
           
-        parent_layout.addLayout(time_layout)  
+        interval_layout.addLayout(time_layout)  
           
         # 信頼度表示  
         self.confidence_label = QLabel("Confidence: N/A")  
-        parent_layout.addWidget(self.confidence_label)  
-      
-    def _create_action_details_section(self, parent_layout: QVBoxLayout):  
-        """アクション詳細編集セクションを作成"""  
+        interval_layout.addWidget(self.confidence_label)  
+          
+        # アクション詳細編集セクション  
         action_detail_layout = QVBoxLayout()  
           
         # 手の種類選択  
@@ -118,53 +98,86 @@ class ActionEditor(QWidget):
         action_detail_layout.addWidget(QLabel("Tool:"))  
         action_detail_layout.addWidget(self.tool_edit)  
           
-        parent_layout.addLayout(action_detail_layout)  
-      
-    def _create_button_section(self, parent_layout: QVBoxLayout):  
-        """ボタンセクションを作成"""  
-        button_layout = QHBoxLayout()  
+        interval_layout.addLayout(action_detail_layout)  
           
+        # ボタンセクション  
+        button_layout = QHBoxLayout()  
         self.add_button = QPushButton("Add New Interval")  
         self.delete_button = QPushButton("Delete Interval")  
-          
         button_layout.addWidget(self.add_button)  
         button_layout.addWidget(self.delete_button)  
-        parent_layout.addLayout(button_layout)  
+        interval_layout.addLayout(button_layout)  
+          
+        interval_group.setLayout(interval_layout)  
+        layout.addWidget(interval_group)  
+        self.setLayout(layout)  
+          
+        # シグナル接続（UI構築後に実行）  
+        self._connect_signals()  
       
     def _connect_signals(self):  
         """シグナル接続を設定"""  
-        # 即時反映のためのシグナル接続  
-        self.start_spinbox.valueChanged.connect(self.on_action_value_changed)  
-        self.end_spinbox.valueChanged.connect(self.on_action_value_changed)  
-        self.hand_combo.currentTextChanged.connect(self.on_action_value_changed)  
-        self.action_verb_edit.textChanged.connect(self.on_action_value_changed)  
-        self.manipulated_object_edit.textChanged.connect(self.on_action_value_changed)  
-        self.target_object_edit.textChanged.connect(self.on_action_value_changed)  
-        self.tool_edit.textChanged.connect(self.on_action_value_changed)  
+        if self._signals_connected:  
+            return  
           
-        # ボタンクリック  
-        self.add_button.clicked.connect(self.add_new_interval)  
-        self.delete_button.clicked.connect(self.delete_interval)  
+        try:  
+            # 即時反映のためのシグナル接続  
+            self.start_spinbox.valueChanged.connect(self.on_action_value_changed)  
+            self.end_spinbox.valueChanged.connect(self.on_action_value_changed)  
+            self.hand_combo.currentTextChanged.connect(self.on_action_value_changed)  
+            self.action_verb_edit.textChanged.connect(self.on_action_value_changed)  
+            self.manipulated_object_edit.textChanged.connect(self.on_action_value_changed)  
+            self.target_object_edit.textChanged.connect(self.on_action_value_changed)  
+            self.tool_edit.textChanged.connect(self.on_action_value_changed)  
+              
+            # ボタンクリック  
+            self.add_button.clicked.connect(self.add_new_interval)  
+            self.delete_button.clicked.connect(self.delete_interval)  
+              
+            self._signals_connected = True  
+        except Exception as e:  
+            print(f"Error connecting signals: {e}")  
       
     def set_current_query_results(self, query_result: QueryResults):  
         """現在のクエリ結果を設定"""  
+        if self._is_initializing:  
+            return  
+        
+        # 重要：同じQueryResultで既に編集中の場合は上書きしない  
+        if (self.current_query_result and   
+            self.current_query_result == query_result and  
+            hasattr(self, '_editing_in_progress') and self._editing_in_progress):  
+            return  
+        
         self.current_query_result = query_result  
-        self.clear_selection()  
+        self.clear_selection()
       
     def set_selected_interval(self, interval: DetectionInterval, index: int):  
         """選択された区間を設定"""  
+        if self._is_initializing:  
+            return  
+          
         self.selected_interval = interval  
         self.selected_interval_index = index  
+        # デバッグ情報を追加  
+
+        #show_call_stack()
         self.update_interval_ui()  
       
     def clear_selection(self):  
         """選択をクリア"""  
+        if self._is_initializing:  
+            return  
+          
         self.selected_interval = None  
         self.selected_interval_index = -1  
         self.update_interval_ui()  
       
     def update_interval_ui(self):  
         """区間編集UIを更新"""  
+        if self._is_initializing:  
+            return  
+          
         if self.selected_interval:  
             self._update_ui_with_interval_data()  
         else:  
@@ -172,6 +185,9 @@ class ActionEditor(QWidget):
       
     def _update_ui_with_interval_data(self):  
         """区間データでUIを更新"""  
+        if self._is_initializing:  
+            return  
+          
         # シグナルを一時的に無効化  
         self._block_signals(True)  
           
@@ -191,6 +207,9 @@ class ActionEditor(QWidget):
       
     def _update_action_fields(self):  
         """アクション編集フィールドを更新"""  
+        if self._is_initializing:  
+            return  
+          
         try:  
             hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
               
@@ -213,6 +232,10 @@ class ActionEditor(QWidget):
       
     def _clear_ui_fields(self):  
         """UIフィールドをクリア"""  
+        if self._is_initializing:  
+            return  
+          
+        # シグナルを一時的に無効化  
         self._block_signals(True)  
           
         try:  
@@ -225,10 +248,14 @@ class ActionEditor(QWidget):
             self.tool_edit.clear()  
           
         finally:  
+            # シグナルを再有効化  
             self._block_signals(False)  
       
     def _block_signals(self, block: bool):  
         """シグナルのブロック/アンブロック"""  
+        if self._is_initializing or not self._signals_connected:  
+            return  
+          
         widgets = [  
             self.start_spinbox, self.end_spinbox, self.hand_combo,  
             self.action_verb_edit, self.manipulated_object_edit,  
@@ -236,23 +263,32 @@ class ActionEditor(QWidget):
         ]  
           
         for widget in widgets:  
-            if widget:  
+            try:  
                 widget.blockSignals(block)  
+            except:  
+                continue  
       
     def on_action_value_changed(self):  
         """アクション値が変更された時の即時処理"""  
+        if self._is_initializing:  
+            return  
+          
+        # 編集中フラグを設定  
+        self._editing_in_progress = True  
+
         # 連続入力を防ぐため遅延処理  
         if self._action_timer and self._action_timer.isActive():  
             self._action_timer.stop()  
           
         self._action_timer = QTimer()  
         self._action_timer.setSingleShot(True)  
-        self._action_timer.timeout.connect(self.apply_interval_changes)  
+        self._action_timer.timeout.connect(self.apply_action_changes)  
         self._action_timer.start(500)  # 500ms後に適用  
       
-    def apply_interval_changes(self):  
+    def apply_action_changes(self):  
         """区間変更を適用"""  
-        if not self.selected_interval or not self.current_query_result or not self.command_factory:  
+        if (self._is_initializing or not self.selected_interval or   
+            not self.current_query_result or not self.command_factory):  
             return  
           
         # Stepクエリの場合は何もしない  
@@ -286,10 +322,16 @@ class ActionEditor(QWidget):
                 self.current_query_result, old_query_text, new_query_text  
             )  
           
+        # コマンド実行後、UIを即座に更新（古い実装と同様）  
+        self.update_interval_ui() 
+
         # シグナル発信  
         self.intervalUpdated.emit()  
         self.dataChanged.emit()  
-      
+
+        # Timeline同期を実行
+        self.main_window.application_coordinator.synchronize_timeline_updates()
+
     def _build_new_query_text(self) -> str:  
         """入力フィールドから新しいクエリテキストを構築"""  
         hand_mapping = {  
@@ -306,70 +348,89 @@ class ActionEditor(QWidget):
         tool = self.tool_edit.text().strip() or "None"  
           
         return f"{hand_type}_{action_verb}_{manipulated_object}_{target_object}_{tool}"  
-      
+    
     def delete_interval(self):  
         """区間を削除"""  
-        if not self.selected_interval or not self.current_query_result or not self.command_factory:  
+        if (self._is_initializing or not self.selected_interval or   
+            not self.current_query_result or not self.command_factory): 
+            print("DEBUG: Early return due to missing conditions")   
             return  
-          
+        
         index = self.current_query_result.relevant_windows.index(self.selected_interval)  
           
-        command = self.command_factory.create_interval_delete_command(  
+        self.command_factory.create_and_execute_interval_delete(  
             self.current_query_result, self.selected_interval, index  
         )  
-        self.command_factory.execute_command(command)  
-          
-        self.intervalDeleted.emit()  
-
-    def add_new_interval(self):  
-        """新しい区間を追加"""  
-        if not self.current_query_result or not self.command_factory:  
-            return  
-          
-        # デフォルトの区間長  
-        default_duration = 5.0  
-          
-        # 現在選択されている区間がある場合は、その終了時刻の直後に配置  
-        if self.selected_interval:  
-            start_time = self.selected_interval.end_time  
-            end_time = start_time + default_duration  
-        else:  
-            # 選択されている区間がない場合は、既存の区間の最後の後に配置  
-            existing_intervals = self.current_query_result.relevant_windows  
-            if existing_intervals:  
-                # 最も遅い終了時刻を見つける  
-                latest_end = max(interval.end_time for interval in existing_intervals)  
-                start_time = latest_end  
-                end_time = start_time + default_duration  
-            else:  
-                # 区間が全くない場合は0秒から開始  
-                start_time = 0.0  
-                end_time = default_duration  
-          
-        # 動画の長さを超えないように調整  
-        video_duration = self._get_video_duration()  
-          
-        if end_time > video_duration:  
-            end_time = video_duration  
-            start_time = max(0, end_time - default_duration)  
-          
-        if start_time >= end_time:  
-            QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")  
-            return  
-          
-        # 新しい区間を作成  
-        new_interval = DetectionInterval(  
-            start_time, end_time, 1.0, len(self.current_query_result.relevant_windows)  
-        )  
-        new_interval.query_result = self.current_query_result  
-          
-        command = self.command_factory.create_interval_add_command(  
-            self.current_query_result, new_interval  
-        )  
-        self.command_factory.execute_command(command)  
           
         # シグナル発信  
-        self.intervalAdded.emit()  
+        self.intervalDeleted.emit()  
+        self.dataChanged.emit()  
+  
+    def add_new_interval(self):    
+        """新しい区間を追加"""    
+        if (self._is_initializing or not self.current_query_result or     
+            not self.command_factory):    
+            return    
+            
+        # デフォルトの区間長    
+        default_duration = 5.0    
+            
+        # 現在選択されている区間がある場合は、その終了時刻の直後に配置    
+        if self.selected_interval:    
+            start_time = self.selected_interval.end_time    
+            end_time = start_time + default_duration    
+        else:    
+            # 選択されている区間がない場合は、既存の区間の最後の後に配置    
+            existing_intervals = self.current_query_result.relevant_windows    
+            if existing_intervals:    
+                # 最も遅い終了時刻を見つける    
+                latest_end = max(interval.end_time for interval in existing_intervals)    
+                start_time = latest_end    
+                end_time = start_time + default_duration    
+            else:    
+                # 区間が全くない場合は0秒から開始    
+                start_time = 0.0    
+                end_time = default_duration    
+            
+        # 動画の長さを超えないように調整    
+        video_duration = self._get_video_duration()    
+            
+        if end_time > video_duration:    
+            end_time = video_duration    
+            start_time = max(0, end_time - default_duration)    
+            
+        if start_time >= end_time:    
+            QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")    
+            return    
+            
+        # 選択されているIntervalのQueryResultsを優先的に使用  
+        source_query_result = None  
+        if self.selected_interval and hasattr(self.selected_interval, 'query_result'):  
+            source_query_result = self.selected_interval.query_result  
+        else:  
+            source_query_result = self.current_query_result          
+
+        # 独立したQueryResultsを作成  
+        import copy  
+        independent_query_result = copy.deepcopy(source_query_result)  
+        
+        # 新しい区間を作成    
+        new_interval = DetectionInterval(    
+            start_time, end_time, 1.0, 0  # indexは0にリセット  
+        )    
+        # relevant_windowsを空にする 
+        independent_query_result.relevant_windows = []
+        new_interval.query_result = independent_query_result    
+            
+        # 新しいQueryResultsをcurrent_query_resultsに追加  
+        self.main_window.application_coordinator.current_query_results.append(independent_query_result)
+
+        self.command_factory.create_and_execute_interval_add(    
+            independent_query_result, new_interval    
+        )  
+        # シグナル発信    
+        self.intervalAdded.emit()    
+        self.dataChanged.emit() 
       
     def _get_video_duration(self) -> float:  
         """動画の長さを取得"""  
@@ -388,5 +449,6 @@ class ActionEditor(QWidget):
             'has_query_result': self.current_query_result is not None,  
             'has_selected_interval': self.selected_interval is not None,  
             'selected_interval_index': self.selected_interval_index,  
-            'is_step_query': self.is_step_query()  
-        }
+            'is_step_query': self.is_step_query(),  
+            'is_initializing': self._is_initializing  
+        }    

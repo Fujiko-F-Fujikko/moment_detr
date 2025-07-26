@@ -9,6 +9,7 @@ class DetectionInterval:
     query_id: Optional[int] = None  
     label: Optional[str] = None
     query_result: Optional[object] = None
+    interval_id: Optional[str] = None
       
     def __eq__(self, other):  
         if not isinstance(other, DetectionInterval):  
@@ -20,6 +21,10 @@ class DetectionInterval:
     def __hash__(self):  
         return hash((self.start_time, self.end_time, self.confidence_score))
 
+    def __post_init__(self):  
+        # 一意IDを自動生成（時間とconfidenceから）  
+        if self.interval_id is None:  
+            self.interval_id = f"{self.start_time:.3f}_{self.end_time:.3f}_{self.confidence_score:.6f}"
     @property  
     def duration(self) -> float:  
         return self.end_time - self.start_time  

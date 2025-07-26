@@ -1,8 +1,11 @@
-# class diaglam
+# old class diaglam
 
 ## abstract
 
 moment_detrの推論結果JSONファイルを読み込んで動画の検出区間を確認できるViewerアプリケーションのクラス図です。実装に基づいて設計されています。
+
+## src
+この設計に基づいた実装は[old](../old/)ディレクトリにあります。
 
 ## クラス図
 

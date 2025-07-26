@@ -75,8 +75,14 @@ class EditWidgetManager(QWidget):
       
     def set_current_query_results(self, query_result: QueryResults):  
         """現在のクエリ結果を設定"""  
-        self.action_editor.set_current_query_results(query_result)  
-          
+        # StepEditorにも情報を設定（Step関連の場合）  
+        if query_result and query_result.query_text.startswith("Step:"):  
+            # StepEditorに必要な情報を設定  
+            self.step_editor.set_current_query_results(query_result)  
+        else:
+            # ActionEditorに必要な情報を設定  
+            self.action_editor.set_current_query_results(query_result)
+
         # ステップクエリの場合はStep編集タブに切り替え  
         if query_result and query_result.query_text.startswith("Step:"):  
             self.tab_widget.setCurrentIndex(1)  # Step Edit tab  
@@ -85,10 +91,18 @@ class EditWidgetManager(QWidget):
       
     def set_selected_interval(self, interval: DetectionInterval, index: int):  
         """選択された区間を設定"""  
+        # ActionEditorに設定  
         self.action_editor.set_selected_interval(interval, index)  
-          
+        
+        # StepEditorにも情報を渡す（Step区間の場合）  
+        if hasattr(interval, 'query_result') and interval.query_result:  
+            if interval.query_result.query_text.startswith("Step:"):  
+                # Step区間の場合、StepEditorで該当ステップを選択  
+                if hasattr(interval, 'label') and interval.label:  
+                    self.step_editor.select_step(step_text=interval.label)
+                    
         # 区間の種類に応じて適切なタブに切り替え  
-        self.switch_to_appropriate_tab(interval)  
+        self.switch_to_appropriate_tab(interval)
       
     def switch_to_appropriate_tab(self, interval: DetectionInterval):  
         """区間の種類に応じて適切なタブに切り替える"""  
@@ -101,7 +115,7 @@ class EditWidgetManager(QWidget):
                 self.tab_widget.setCurrentIndex(1)  
                 # クリックされたステップを選択状態にする  
                 if hasattr(interval, 'label'):  
-                    self.step_editor.select_step_by_label(interval.label)  
+                    self.step_editor.select_step(step_text=interval.label)  
             else:  
                 # Action Editタブに切り替え  
                 self.tab_widget.setCurrentIndex(0)  
@@ -122,23 +136,39 @@ class EditWidgetManager(QWidget):
         """現在のタブインデックスを設定"""  
         if self.tab_widget and 0 <= index < self.tab_widget.count():  
             self.tab_widget.setCurrentIndex(index)  
-      
-    def get_action_editor(self) -> ActionEditor:  
+     
+    def get_action_editor(self):  
         """ActionEditorを取得"""  
-        return self.action_editor  
+        if hasattr(self, 'action_editor'):  
+            return self.action_editor  
+        return None  
       
-    def get_step_editor(self) -> StepEditor:  
+    def get_step_editor(self):  
         """StepEditorを取得"""  
-        return self.step_editor  
+        if hasattr(self, 'step_editor'):  
+            return self.step_editor  
+        return None  
       
     def refresh_ui(self):  
-        """UI全体を更新"""  
-        # ステップリストを更新  
-        self.step_editor.refresh_step_list()  
+        """全体のUIを更新"""  
+        # ActionEditorの更新  
+        action_editor = self.get_action_editor()  
+        if action_editor:  
+            action_editor.update_interval_ui()  
           
-        # アクション編集UIを更新  
-        self.action_editor.update_interval_ui()  
+        # StepEditorの更新  
+        step_editor = self.get_step_editor()  
+        if step_editor:  
+            step_editor.refresh_step_list()  
+            step_editor._update_step_edit_ui()
+          
+        # その他のUI更新処理  
+        self.update()  
       
+    def update_display(self):  
+        """表示を更新（MainApplicationWindowから呼び出される）"""  
+        self.refresh_ui()
+
     def get_current_state(self) -> dict:  
         """現在の編集状態を取得（デバッグ用）"""  
         return {  
@@ -147,3 +177,28 @@ class EditWidgetManager(QWidget):
             'step_editor_state': self.step_editor.get_current_state(),  
             'has_command_factory': self.command_factory is not None  
         }
+
+    def handle_step_selection_from_editor(self, step_text: str, start_time: float, end_time: float):  
+        """StepEditorからのStep選択を処理"""  
+        if self.main_window and hasattr(self.main_window, 'application_coordinator'):  
+            app_coordinator = self.main_window.application_coordinator  
+            timeline_manager = app_coordinator.timeline_display_manager  
+            
+            # StepsタイムラインのTimelineDataを取得  
+            steps_timeline_widget = timeline_manager.get_timeline_by_type("Steps")  
+            if steps_timeline_widget and hasattr(steps_timeline_widget, 'timeline_data'):  
+                timeline_data = steps_timeline_widget.timeline_data  
+                
+                # 該当するDetectionIntervalを検索  
+                found_interval = None  
+                for interval in timeline_data.intervals:  
+                    if (interval.label == step_text and   
+                        interval.start_time == start_time and   
+                        interval.end_time == end_time):  
+                        found_interval = interval  
+                        break  
+                
+                if found_interval:  
+                    app_coordinator.handle_timeline_interval_clicked(  
+                        found_interval, found_interval.query_result  
+                    )

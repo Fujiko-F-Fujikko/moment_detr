@@ -134,8 +134,69 @@ class EditCommandFactory:
         except Exception as e:  
             print(f"Failed to execute step add command: {e}")  
             return False  
-  
-  
+
+    def create_and_execute_step_text_modify(self, stt_data_manager, video_name: str,  
+                                        step_index: int, old_text: str, new_text: str) -> bool:  
+        """ステップテキスト変更コマンドを作成して実行"""  
+        try:  
+            command = self.create_step_text_modify_command(  
+                stt_data_manager, video_name, step_index, old_text, new_text  
+            )  
+            self.execute_command(command)  
+            return True  
+        except Exception as e:  
+            print(f"Failed to execute step text modify command: {e}")  
+            return False  
+
+    def create_and_execute_interval_delete(self, query_result: QueryResults,  
+                                        interval: DetectionInterval, index: int) -> bool:  
+        """区間削除コマンドを作成して実行"""  
+        try:  
+            command = self.create_interval_delete_command(query_result, interval, index)  
+            self.execute_command(command)  
+            return True  
+        except Exception as e:  
+            print(f"Failed to execute interval delete command: {e}")  
+            return False  
+    
+    def create_and_execute_interval_add(self, query_result: QueryResults,  
+                                    interval: DetectionInterval) -> bool:  
+        """区間追加コマンドを作成して実行"""  
+        try:  
+            command = self.create_interval_add_command(query_result, interval)  
+            self.execute_command(command)  
+            return True  
+        except Exception as e:  
+            print(f"Failed to execute interval add command: {e}")  
+            return False  
+    
+    def create_and_execute_step_modify(self, interval: DetectionInterval,  
+                                    old_start: float, old_end: float,  
+                                    new_start: float, new_end: float,  
+                                    stt_data_manager, video_name: str) -> bool:  
+        """ステップ変更コマンドを作成して実行"""  
+        try:  
+            command = self.create_step_modify_command(  
+                interval, old_start, old_end, new_start, new_end,  
+                stt_data_manager, video_name  
+            )  
+            self.execute_command(command)  
+            return True  
+        except Exception as e:  
+            print(f"Failed to execute step modify command: {e}")  
+            return False  
+    
+    def create_and_execute_step_delete(self, stt_data_manager, video_name: str,  
+                                    step_index: int) -> bool:  
+        """ステップ削除コマンドを作成して実行"""  
+        try:  
+            command = self.create_step_delete_command(stt_data_manager, video_name, step_index)  
+            self.execute_command(command)  
+            return True  
+        except Exception as e:  
+            print(f"Failed to execute step delete command: {e}")  
+            return False
+
 class CompositeEditCommand(QUndoCommand):  
     """複数のコマンドを組み合わせた複合コマンド"""  
       

@@ -1,13 +1,12 @@
-# STTDataController.py  
+# STTDataController.py (完全版)  
 import json  
 from pathlib import Path  
-from typing import Dict, List, Optional  
-from datetime import datetime  
+from typing import Dict, List
 from dataclasses import asdict  
 from PyQt6.QtCore import QObject, pyqtSignal  
   
 from STTDataStructures import *  
-from Results import QueryResults, InferenceResults  
+from Results import QueryResults  
 from VideoInfo import VideoInfo  
   
 class STTDataController(QObject):  
@@ -161,7 +160,7 @@ class STTDataController(QObject):
             if step_index >= len(video_data.steps):  
                 return False  
               
-            del video_data.steps[step_index]  
+            video_data.steps.pop(step_index)  
               
             # シグナル発信  
             self.stepDeleted.emit(video_name, step_index)  
@@ -172,90 +171,81 @@ class STTDataController(QObject):
         except Exception as e:  
             raise Exception(f"Failed to delete step: {str(e)}")  
       
-    def get_video_steps(self, video_name: str) -> List[StepEntry]:  
-        """指定動画のステップ一覧を取得"""  
-        if video_name in self.stt_dataset.database:  
-            return self.stt_dataset.database[video_name].steps  
-        return []  
+    def _get_or_create_action_category(self, query_text: str) -> int:  
+        """アクションカテゴリを取得または作成"""  
+        # 既存のカテゴリを検索  
+        for category in self.stt_dataset.action_categories:  
+            if category.interaction == query_text:  
+                return category.id  
+          
+        # 新しいカテゴリを作成  
+        new_category = ActionCategory(  
+            id=self.action_id_counter,  
+            interaction=query_text  
+        )  
+        self.stt_dataset.action_categories.append(new_category)  
+        self.action_id_counter += 1  
+          
+        return new_category.id  
       
-    def get_video_actions(self, video_name: str) -> Dict[str, List[ActionEntry]]:  
-        """指定動画のアクション一覧を取得"""  
-        if video_name in self.stt_dataset.database:  
-            return self.stt_dataset.database[video_name].actions  
-        return {}  
+    def _get_or_create_step_category(self, step_text: str) -> int:  
+        """ステップカテゴリを取得または作成"""  
+        # 既存のカテゴリを検索  
+        for category in self.stt_dataset.step_categories:  
+            if category.step == step_text:  
+                return category.id  
+          
+        # 新しいカテゴリを作成  
+        new_category = StepCategory(  
+            id=self.step_id_counter,  
+            step=step_text  
+        )  
+        self.stt_dataset.step_categories.append(new_category)  
+        self.step_id_counter += 1  
+          
+        return new_category.id  
       
     def update_video_subset(self, video_name: str, subset: str) -> bool:  
-        """動画のサブセットを更新"""  
-        if video_name in self.stt_dataset.database:  
-            self.stt_dataset.database[video_name].subset = subset  
-            self.datasetUpdated.emit()  
-            return True  
-        return False  
+        """動画のサブセット設定を更新"""  
+        if video_name not in self.stt_dataset.database:  
+            return False  
+          
+        self.stt_dataset.database[video_name].subset = subset  
+        self.datasetUpdated.emit()  
+        return True  
       
     def export_to_json(self, file_path: str) -> bool:  
-        """STT Dataset形式でJSONエクスポート"""  
+        """STTデータセットをJSONファイルにエクスポート"""  
         try:  
-            # データ作成日時を更新  
-            self.stt_dataset.info["data_created"] = datetime.now().strftime("%Y/%m/%d")  
+            # データセットを辞書に変換  
+            dataset_dict = asdict(self.stt_dataset)  
               
-            # データクラスを辞書に変換  
-            data_dict = asdict(self.stt_dataset)  
-              
+            # JSONファイルに保存  
             with open(file_path, 'w', encoding='utf-8') as f:  
-                json.dump(data_dict, f, indent=2, ensure_ascii=False)  
+                json.dump(dataset_dict, f, ensure_ascii=False, indent=2)  
               
-            # シグナル発信  
             self.exportCompleted.emit(file_path)  
-              
             return True  
               
         except Exception as e:  
-            raise Exception(f"Failed to export dataset: {str(e)}")  
-      
-    def _get_or_create_action_category(self, interaction: str) -> int:  
-        """アクションカテゴリを取得または作成"""  
-        for category in self.stt_dataset.action_categories:  
-            if category.interaction == interaction:  
-                return category.id  
-          
-        new_id = self.action_id_counter  
-        self.action_id_counter += 1  
-          
-        self.stt_dataset.action_categories.append(  
-            ActionCategory(id=new_id, interaction=interaction)  
-        )  
-        return new_id  
-      
-    def _get_or_create_step_category(self, step: str) -> int:  
-        """ステップカテゴリを取得または作成"""  
-        for category in self.stt_dataset.step_categories:  
-            if category.step == step:  
-                return category.id  
-          
-        new_id = self.step_id_counter  
-        self.step_id_counter += 1  
-          
-        self.stt_dataset.step_categories.append(  
-            StepCategory(id=new_id, step=step)  
-        )  
-        return new_id  
+            raise Exception(f"Failed to export STT dataset: {str(e)}")  
       
     def get_dataset_info(self) -> Dict:  
         """データセット情報を取得"""  
+        videos = list(self.stt_dataset.database.keys())  
         return {  
-            'total_videos': len(self.stt_dataset.database),  
-            'total_action_categories': len(self.stt_dataset.action_categories),  
-            'total_step_categories': len(self.stt_dataset.step_categories),  
-            'videos': list(self.stt_dataset.database.keys())  
+            'total_videos': len(videos),  
+            'videos': videos,  
+            'action_categories': len(self.stt_dataset.action_categories),  
+            'step_categories': len(self.stt_dataset.step_categories)  
         }  
       
-    def clear_dataset(self):  
-        """データセットをクリア"""  
-        self.stt_dataset = STTDataset()  
-        self.action_id_counter = 1  
-        self.step_id_counter = 1  
-        self.datasetUpdated.emit()  
-      
-    def is_video_loaded(self, video_name: str) -> bool:  
-        """指定動画がデータセットに存在するかチェック"""  
-        return video_name in self.stt_dataset.database
+    def is_dataset_loaded(self) -> bool:  
+        """データセットが読み込まれているかチェック"""  
+        return len(self.stt_dataset.database) > 0
+
+    def get_steps(self, video_name: str) -> List[StepEntry]:  
+        """指定された動画のステップリストを取得"""  
+        if video_name not in self.stt_dataset.database:  
+            return []  
+        return self.stt_dataset.database[video_name].steps
