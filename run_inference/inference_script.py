@@ -1,6 +1,7 @@
 import sys  
 import json  
 import os  
+from datetime import datetime
 from pathlib import Path  
 import torch
   
@@ -64,7 +65,8 @@ def main():
         output_dir = "inference_results"
         if( not os.path.exists(output_dir)):
             os.makedirs(output_dir)
-        output_file = os.path.join(output_dir, f"result_{Path(video_path).stem}_multi_query.json")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(output_dir, f"result_{Path(video_path).stem}_{timestamp}.json")
         with open(output_file, 'w', encoding='utf-8') as f:  
             json.dump(result, f, indent=2, ensure_ascii=False)  
         print(f"\nResult saved to: {output_file}")  
