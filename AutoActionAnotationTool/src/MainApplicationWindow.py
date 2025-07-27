@@ -1,21 +1,24 @@
 # MainApplicationWindow.py (リファクタリング版)  
 import sys  
 import argparse  
-from datetime import datetime
-import os
+from datetime import datetime  
+import os  
   
-from PyQt6.QtWidgets import QMainWindow, QApplication
+from PyQt6.QtWidgets import QMainWindow, QApplication  
 from PyQt6.QtGui import QAction, QUndoStack, QKeySequence, QShortcut  
 from PyQt6.QtCore import Qt  
   
 from ApplicationCoordinator import ApplicationCoordinator  
 from TimelineDisplayManager import TimelineDisplayManager  
-from EditWidgetManager import EditWidgetManager  
 from LayoutOrchestrator import LayoutOrchestrator  
 from VideoPlayerController import VideoPlayerController  
 from FileManager import FileManager  
-from ResultsDisplayManager import ResultsDisplayManager
-from Utilities import show_call_stack  # デバッグ用スタックトレース表示
+from UnifiedDataController import UnifiedDataController  
+from UnifiedIntervalEditor import UnifiedIntervalEditor  
+from UnifiedEditCommandFactory import UnifiedEditCommandFactory  
+from DisplayManager import DisplayManager  
+from ExportController import ExportController  
+from Utilities import show_call_stack  
   
 class MainApplicationWindow(QMainWindow):  
     """UIの初期化とメニュー設定に特化したメインウィンドウクラス"""  
@@ -25,21 +28,34 @@ class MainApplicationWindow(QMainWindow):
         self.setWindowTitle("Moment-DETR Video Annotation Viewer")  
         self.setGeometry(100, 100, 1600, 1000)  
           
+        # 統一データコントローラーを初期化  
+        self.unified_data_controller = UnifiedDataController()  
+          
         # Undo/Redoスタックを初期化  
         self.undo_stack = QUndoStack(self)  
+          
+        # 統一編集コマンドファクトリーを初期化  
+        self.edit_command_factory = UnifiedEditCommandFactory(  
+            self.unified_data_controller, self  
+        )  
           
         # コアコンポーネントを初期化  
         self.application_coordinator = ApplicationCoordinator(self)  
         self.timeline_display_manager = TimelineDisplayManager()  
-        self.edit_widget_manager = EditWidgetManager(self)  
         self.layout_orchestrator = LayoutOrchestrator(self)  
         self.video_controller = VideoPlayerController()  
         self.file_manager = FileManager()  
-        self.results_display_manager = ResultsDisplayManager(self.application_coordinator.get_results_data_controller())
+          
+        # 統一エディターを初期化  
+        self.unified_interval_editor = UnifiedIntervalEditor(self.unified_data_controller)  
+          
+        # 表示管理とエクスポート管理を初期化  
+        self.display_manager = DisplayManager(self.unified_data_controller)  
+        self.export_controller = ExportController(self.unified_data_controller)  
           
         # UIを設定  
         self.setup_ui()  
-
+          
         # コンポーネント間の接続を設定  
         self.coordinate_components()  
           
@@ -48,58 +64,50 @@ class MainApplicationWindow(QMainWindow):
       
     def coordinate_components(self):  
         """各コーディネーターへの委譲"""  
+        # ApplicationCoordinatorに統一データコントローラーを設定  
+        self.application_coordinator.set_unified_data_controller(self.unified_data_controller)  
+          
         # ApplicationCoordinatorにUI管理コンポーネントを設定  
         self.application_coordinator.set_ui_components(  
             self.timeline_display_manager,  
-            self.edit_widget_manager,  
-            self.video_controller,
-            self.results_display_manager
+            self.unified_interval_editor,  
+            self.video_controller,  
+            self.display_manager  
         )  
-          
-        # EditWidgetManagerにSTTDataControllerを設定  
-        stt_controller = self.application_coordinator.get_stt_data_controller()  
-        self.edit_widget_manager.set_stt_data_manager(stt_controller)  
       
     def setup_ui(self):  
         """UIレイアウトの初期化"""  
         # 動画ウィジェットとコントロールを取得  
         video_widget = self.video_controller.get_video_widget()  
         controls_layout = self.video_controller.get_controls_layout()  
-        
+          
         # LayoutOrchestratorを使用してメインレイアウトを作成  
         main_splitter = self.layout_orchestrator.create_main_layout(  
-            video_widget, controls_layout, self.timeline_display_manager, self.edit_widget_manager  
+            video_widget, controls_layout, self.timeline_display_manager,   
+            self.unified_interval_editor  
         )  
-        
+          
         # UI要素を取得  
         ui_components = self.layout_orchestrator.get_ui_components()  
-        
-        # 結果表示管理を設定（修正版）  
-        results_controller = self.application_coordinator.get_results_data_controller()  
-        if 'results_list' in ui_components and ui_components['results_list'] is not None:  
-            self.results_display_manager = ResultsDisplayManager(results_controller)  
-            self.results_display_manager.set_ui_components(ui_components['results_list'])  
-            self.results_display_manager.intervalSelected.connect(self.on_interval_selected)  
-        else:  
-            print("DEBUG: results_list not found, signal not connected")  
-        
+          
         # フィルタコントロールの設定  
         if 'confidence_slider' in ui_components:  
             self.confidence_slider = ui_components['confidence_slider']  
             self.confidence_value_label = ui_components['confidence_value_label']  
-        
+          
         if 'hand_type_combo' in ui_components:  
             self.hand_type_combo = ui_components['hand_type_combo']  
-        
+          
         # メインレイアウトを設定  
         self.setCentralWidget(main_splitter)  
-
+      
     def setup_connections(self):  
         """シグナル・スロット接続の設定"""  
-        # ApplicationCoordinatorのシグナル接続  
-        self.application_coordinator.videoLoaded.connect(self.on_video_loaded)  
-        self.application_coordinator.resultsLoaded.connect(self.on_results_loaded)  
-        self.application_coordinator.dataChanged.connect(self.on_data_changed)  
+        # UnifiedDataControllerのシグナル接続  
+        self.unified_data_controller.dataUpdated.connect(self.on_data_changed)  
+        self.unified_data_controller.intervalAdded.connect(self.on_interval_added)  
+        self.unified_data_controller.intervalModified.connect(self.on_interval_modified)  
+        self.unified_data_controller.intervalDeleted.connect(self.on_interval_deleted)  
           
         # 動画プレイヤーコントローラーの接続  
         self.video_controller.positionChanged.connect(self.on_video_position_changed)  
@@ -110,7 +118,7 @@ class MainApplicationWindow(QMainWindow):
         self.file_manager.resultsLoaded.connect(self.load_inference_results_from_path)  
         self.file_manager.resultsSaved.connect(self.on_results_saved)  
         self.file_manager.sttDatasetExported.connect(self.on_stt_dataset_exported)  
-
+          
         # フィルタコントロールの接続  
         if hasattr(self, 'confidence_slider'):  
             self.confidence_slider.valueChanged.connect(self.update_confidence_filter)  
@@ -118,11 +126,11 @@ class MainApplicationWindow(QMainWindow):
         if hasattr(self, 'hand_type_combo'):  
             self.hand_type_combo.currentTextChanged.connect(self.update_hand_type_filter)  
           
-        # EditWidgetManagerのシグナル接続  
-        self.edit_widget_manager.intervalUpdated.connect(self.on_interval_updated)  
-        self.edit_widget_manager.intervalDeleted.connect(self.on_interval_deleted)  
-        self.edit_widget_manager.intervalAdded.connect(self.on_interval_added)  
-        self.edit_widget_manager.dataChanged.connect(self.on_data_changed)  
+        # UnifiedIntervalEditorのシグナル接続  
+        self.unified_interval_editor.intervalUpdated.connect(self.on_interval_updated)  
+        self.unified_interval_editor.intervalDeleted.connect(self.on_interval_deleted)  
+        self.unified_interval_editor.intervalAdded.connect(self.on_interval_added)  
+        self.unified_interval_editor.dataChanged.connect(self.on_data_changed)  
       
     def setup_menus(self):  
         """メニューバーの設定"""  
@@ -132,24 +140,24 @@ class MainApplicationWindow(QMainWindow):
         file_menu = menubar.addMenu('File')  
           
         open_video_action = QAction('Open Video', self)  
-        open_video_action.setShortcut(QKeySequence.StandardKey.Open)  # Ctrl+O  
+        open_video_action.setShortcut(QKeySequence.StandardKey.Open)  
         open_video_action.triggered.connect(lambda: self.file_manager.open_video_dialog(self))  
         file_menu.addAction(open_video_action)  
           
         load_results_action = QAction('Load Inference Results', self)  
-        load_results_action.setShortcut(QKeySequence("Ctrl+L"))  # Ctrl+L    
+        load_results_action.setShortcut(QKeySequence("Ctrl+L"))  
         load_results_action.triggered.connect(lambda: self.file_manager.load_inference_results_dialog(self))  
         file_menu.addAction(load_results_action)  
           
         file_menu.addSeparator()  
           
         export_stt_action = QAction('Export STT Dataset', self)  
-        export_stt_action.setShortcut(QKeySequence("Ctrl+E"))  # Ctrl+E  
+        export_stt_action.setShortcut(QKeySequence("Ctrl+E"))  
         export_stt_action.triggered.connect(self.export_stt_dataset)  
         file_menu.addAction(export_stt_action)  
           
         save_results_action = QAction('Save Results', self)  
-        save_results_action.setShortcut(QKeySequence.StandardKey.Save)  # Ctrl+S
+        save_results_action.setShortcut(QKeySequence.StandardKey.Save)  
         save_results_action.triggered.connect(self.save_results)  
         file_menu.addAction(save_results_action)  
           
@@ -157,14 +165,14 @@ class MainApplicationWindow(QMainWindow):
         edit_menu = menubar.addMenu('Edit')  
           
         # Undoアクション  
-        undo_action = self.undo_stack.createUndoAction(self, "Undo")  
-        undo_action.setShortcut(QKeySequence.StandardKey.Undo)  # Ctrl+Z
+        undo_action = self.edit_command_factory.get_undo_stack().createUndoAction(self, "Undo")  
+        undo_action.setShortcut(QKeySequence.StandardKey.Undo)  
         undo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)  
         edit_menu.addAction(undo_action)  
           
         # Redoアクション  
-        redo_action = self.undo_stack.createRedoAction(self, "Redo")  
-        redo_action.setShortcut(QKeySequence.StandardKey.Redo)  # Ctrl+Y
+        redo_action = self.edit_command_factory.get_undo_stack().createRedoAction(self, "Redo")  
+        redo_action.setShortcut(QKeySequence.StandardKey.Redo)  
         redo_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)  
         edit_menu.addAction(redo_action)  
           
@@ -187,169 +195,61 @@ class MainApplicationWindow(QMainWindow):
         # 編集操作  
         delete_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self)  
         delete_shortcut.activated.connect(self._delete_selected_interval)  
-          
-        # タブ切り替え  
-        action_tab_shortcut = QShortcut(QKeySequence("Ctrl+1"), self)  
-        action_tab_shortcut.activated.connect(lambda: self.edit_widget_manager.set_current_tab_index(0))  
-          
-        step_tab_shortcut = QShortcut(QKeySequence("Ctrl+2"), self)  
-        step_tab_shortcut.activated.connect(lambda: self.edit_widget_manager.set_current_tab_index(1))  
       
     def update_display(self):  
         """表示を更新（コマンドクラスから呼び出される）"""  
-        # ApplicationCoordinatorを通じて同期  
-        #show_call_stack()
-        if hasattr(self, 'application_coordinator'):  
-            self.application_coordinator.synchronize_components()  
-          
-        # EditWidgetManagerの更新  
-        if hasattr(self, 'edit_widget_manager'):  
-            self.edit_widget_manager.update_display()  
+        # DisplayManagerを通じて更新  
+        if hasattr(self, 'display_manager'):  
+            self.display_manager.refresh_timeline_display()  
           
         # TimelineDisplayManagerの更新  
         if hasattr(self, 'timeline_display_manager'):  
-            self.timeline_display_manager.update_all_timelines()
-
-    # イベントハンドラー（ApplicationCoordinatorに委譲）  
-    def on_video_loaded(self, video_path: str):  
-        """動画読み込み完了時の処理"""  
-        print(f"Video loaded: {video_path}")  
+            self.timeline_display_manager.update_all_timelines()  
       
-    def on_results_loaded(self, results):  
-        """結果読み込み完了時の処理"""  
-        if hasattr(self, 'results_display_manager') and self.results_display_manager:  
-            self.results_display_manager.force_refresh()
-
-    def on_data_changed(self):  
-        """データ変更時の処理"""  
-        # ApplicationCoordinatorに委譲  
-        self.application_coordinator.synchronize_components()  
-      
-    def on_interval_selected(self, query_result, interval=None, index=0):  
-        """Detection Results一覧からの選択処理（修正版）"""  
-        if query_result and hasattr(query_result, 'relevant_windows') and query_result.relevant_windows:  
-            # 実際にクリックされた区間を使用（引数で渡された場合）  
-            selected_interval = interval if interval else query_result.relevant_windows[0]  
-            selected_index = index if interval else 0  
-            
-            # 重要：現在のAction Editorの状態を保存  
-            current_editor = self.application_coordinator.edit_widget_manager.get_action_editor()  
-            if current_editor and current_editor.current_query_result == query_result:  
-                # 同じQueryResultの場合、現在の編集状態を保持  
-                # query_resultを上書きしない  
-                pass  
-            else:  
-                # 異なるQueryResultの場合のみ更新  
-                self.application_coordinator.edit_widget_manager.set_current_query_results(query_result)  
-            
-            # 選択された区間を設定  
-            self.application_coordinator.edit_widget_manager.set_selected_interval(selected_interval, selected_index)  
-            
-            # Timeline上でハイライト  
-            if self.application_coordinator.timeline_display_manager:  
-                self.application_coordinator.timeline_display_manager.set_highlighted_interval(selected_interval)  
-            
-            # 動画シーク  
-            if self.application_coordinator.video_player_controller:  
-                self.application_coordinator.video_player_controller.seek_to_time(selected_interval.start_time)
-      
-    def on_video_position_changed(self, position: int):  
-        """動画位置変更時の処理"""  
-        current_time = position / 1000.0  
-        self.application_coordinator.synchronize_video_position(current_time)  
-      
-    def on_video_duration_changed(self, duration: int):  
-        """動画長さ変更時の処理"""  
-        if duration > 0:  
-            duration_seconds = duration / 1000.0  
-            self.application_coordinator.synchronize_video_duration(duration_seconds)  
-      
-    def on_interval_updated(self):  
-        """区間更新時の処理"""  
-        self.application_coordinator.handle_edit_events("interval_updated")  
-      
-    def on_interval_deleted(self):  
-        """区間削除時の処理"""  
-        self.application_coordinator.handle_edit_events("interval_deleted")  
-      
-    def on_interval_added(self):  
-        """区間追加時の処理"""  
-        self.application_coordinator.handle_edit_events("interval_added")  
-      
-    def on_results_saved(self, file_path: str):  
-        """結果保存完了時の処理"""  
-        self.file_manager.show_save_success_message(file_path, self)  
-
-    def on_stt_dataset_exported(self, file_path: str):  
-        """STTデータセットエクスポート完了時の処理"""  
-        self.file_manager.show_save_success_message(file_path, self)  
-
-    # ファイル操作（ApplicationCoordinatorに委譲）  
     def load_video_from_path(self, video_path: str):  
-        """動画読み込み"""  
-        self.application_coordinator.load_video(video_path)  
+        """動画ファイルを読み込み"""  
+        # 動画メタデータを統一データコントローラーに追加  
+        # 実装は既存のロジックを参考に  
+        pass  
       
-    def load_inference_results_from_path(self, json_path: str):  
-        """推論結果読み込み"""  
-        self.application_coordinator.load_inference_results(json_path)  
-      
-    def save_results(self):  
-        """結果保存"""  
-        results_controller = self.application_coordinator.get_results_data_controller()  
-        if not results_controller.is_results_loaded():  
-            self.file_manager.show_no_results_warning(self)  
-            return  
-          
-        # 動画ファイル名とタイムスタンプを含むファイル名を生成  
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # ファイル名（拡張子付き）
-        basename = os.path.basename(self.application_coordinator.current_video_path)
-        # ファイル名（拡張子なし）
-        stemname = os.path.splitext(basename)[0]        
-        default_filename = f"{stemname}_{timestamp}.moment-dtr.json"
-
-        file_path = self.file_manager.save_results_dialog(self, default_filename)  
-        if file_path:  
-            try:  
-                results_controller.save_results(file_path)  
-            except Exception as e:  
-                self.file_manager.show_save_error_message(str(e), self)  
+    def load_inference_results_from_path(self, results_path: str):  
+        """推論結果を読み込み"""  
+        success = self.unified_data_controller.load_inference_results(results_path)  
+        if success:  
+            print(f"Loaded inference results from: {results_path}")  
       
     def export_stt_dataset(self):  
-        """STTデータセットエクスポート"""  
-        results_controller = self.application_coordinator.get_results_data_controller()  
-        if not results_controller.is_results_loaded():  
-            self.file_manager.show_no_results_warning(self)  
-            return  
-          
-        # 動画ファイル名とタイムスタンプを含むファイル名を生成  
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # ファイル名（拡張子付き）
-        basename = os.path.basename(self.application_coordinator.current_video_path)
-        # ファイル名（拡張子なし）
-        stemname = os.path.splitext(basename)[0]        
-        default_filename = f"{stemname}_{timestamp}.stt.json"
-
-        file_path = self.file_manager.export_stt_dataset_dialog(self, default_filename)  
-
+        """STTデータセットをエクスポート"""  
+        file_path, _ = self.file_manager.get_save_file_path(  
+            self, "Export STT Dataset", "JSON files (*.json)"  
+        )  
         if file_path:  
-            try:  
-                stt_controller = self.application_coordinator.get_stt_data_controller()  
-                stt_controller.export_to_json(file_path)  
-            except Exception as e:  
-                self.file_manager.show_save_error_message(str(e), self)  
+            success = self.export_controller.export_to_stt_json(file_path)  
+            if success:  
+                self.file_manager.show_save_success_message(file_path, self)  
       
-    # フィルタ操作（ApplicationCoordinatorに委譲）  
-    def update_confidence_filter(self, value: int):  
+    def save_results(self):  
+        """結果を保存"""  
+        file_path, _ = self.file_manager.get_save_file_path(  
+            self, "Save Results", "JSON files (*.json)"  
+        )  
+        if file_path:  
+            filters = {  
+                'confidence_threshold': self.unified_data_controller.confidence_threshold,  
+                'hand_type_filter': self.unified_data_controller.hand_type_filter,  
+                'interval_type_filter': self.unified_data_controller.interval_type_filter  
+            }  
+            success = self.export_controller.export_filtered_intervals(file_path, filters)  
+            if success:  
+                self.file_manager.show_save_success_message(file_path, self)  
+      
+    def update_confidence_filter(self, threshold: float):  
         """信頼度フィルタ更新"""  
-        threshold = value / 100.0  
-        if hasattr(self, 'confidence_value_label'):  
-            self.confidence_value_label.setText(f"{threshold:.2f}")  
-        self.application_coordinator.set_confidence_threshold(threshold)  
+        self.unified_data_controller.set_confidence_threshold(threshold / 100.0)  
       
     def update_hand_type_filter(self, hand_type: str):  
         """Hand Typeフィルタ更新"""  
-        self.application_coordinator.set_hand_type_filter(hand_type)  
+        self.unified_data_controller.set_hand_type_filter(hand_type)  
       
     def seek_relative(self, seconds: float):  
         """現在位置から相対的にシーク"""  
@@ -362,37 +262,73 @@ class MainApplicationWindow(QMainWindow):
       
     def _delete_selected_interval(self):  
         """選択された区間を削除"""  
-        # EditWidgetManagerの現在のエディターに委譲  
-        current_tab = self.edit_widget_manager.get_current_tab_index()  
-        if current_tab == 0:  # Action Edit tab  
-            self.edit_widget_manager.get_action_editor().delete_interval()  
-        elif current_tab == 1:  # Step Edit tab  
-            self.edit_widget_manager.get_step_editor().delete_step()  
+        self.unified_interval_editor.delete_interval()  
       
-    def keyPressEvent(self, event):  
-        """グローバルキーイベント処理"""  
-        if event.key() == Qt.Key.Key_Tab:  
-            # Tabキーでフォーカス移動  
-            self.focusNextChild()  
-            event.accept()  
-        elif event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:  
-            # Enterキーで決定  
-            focused_widget = self.focusWidget()  
-            if hasattr(focused_widget, 'click'):  
-                focused_widget.click()  
-            event.accept()  
-        else:  
-            super().keyPressEvent(event)  
+    # イベントハンドラー  
+    def on_video_loaded(self, video_path: str):  
+        """動画読み込み完了時の処理"""  
+        print(f"Video loaded: {video_path}")  
       
+    def on_results_loaded(self, results):  
+        """結果読み込み完了時の処理"""  
+        print("Results loaded")  
+      
+    def on_data_changed(self):  
+        """データ変更時の処理"""  
+        self.update_display()  
+      
+    def on_interval_updated(self):  
+        """区間更新時の処理"""  
+        self.update_display()  
+      
+    def on_interval_deleted(self):  
+        """区間削除時の処理"""  
+        self.update_display()  
+      
+    def on_interval_added(self):  
+        """区間追加時の処理"""  
+        self.update_display()  
+      
+    def on_interval_modified(self, interval_id: str):  
+        """区間変更時の処理"""  
+        self.update_display()  
+      
+    def on_video_position_changed(self, position: int):  
+        """動画位置変更時の処理"""  
+        current_time = position / 1000.0  
+        self.display_manager.synchronize_with_video_position(current_time)  
+      
+    def on_video_duration_changed(self, duration: int):  
+        """動画長さ変更時の処理"""  
+        if duration > 0:  
+            duration_seconds = duration / 1000.0  
+            # 必要に応じ  
+            # 動画メタデータを更新  
+            if hasattr(self, 'current_video_id') and self.current_video_id:  
+                # 既存の動画メタデータがあれば更新  
+                pass  
+      
+    def on_results_saved(self, file_path: str):  
+        """結果保存完了時の処理"""  
+        self.file_manager.show_save_success_message(file_path, self)  
+  
+    def on_stt_dataset_exported(self, file_path: str):  
+        """STTデータセットエクスポート完了時の処理"""  
+        self.file_manager.show_save_success_message(file_path, self)  
+  
     def get_current_state(self) -> dict:  
         """現在のアプリケーション状態を取得（デバッグ用）"""  
         return {  
-            'application_coordinator_state': self.application_coordinator.get_current_state(),  
-            'timeline_manager_state': self.timeline_display_manager.get_current_state(),  
-            'edit_manager_state': self.edit_widget_manager.get_current_state(),  
-            'layout_state': self.layout_orchestrator.get_layout_state(),  
-            'undo_stack_count': self.undo_stack.count(),  
-            'undo_stack_index': self.undo_stack.index()  
+            'unified_data_controller_state': {  
+                'intervals_count': len(self.unified_data_controller.all_intervals),  
+                'confidence_threshold': self.unified_data_controller.confidence_threshold,  
+                'hand_type_filter': self.unified_data_controller.hand_type_filter,  
+                'interval_type_filter': self.unified_data_controller.interval_type_filter  
+            },  
+            'timeline_manager_state': self.timeline_display_manager.get_current_state() if hasattr(self.timeline_display_manager, 'get_current_state') else {},  
+            'layout_state': self.layout_orchestrator.get_layout_state() if hasattr(self.layout_orchestrator, 'get_layout_state') else {},  
+            'undo_stack_count': self.edit_command_factory.get_undo_stack().count(),  
+            'undo_stack_index': self.edit_command_factory.get_undo_stack().index()  
         }  
   
   

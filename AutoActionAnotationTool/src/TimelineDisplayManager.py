@@ -1,543 +1,416 @@
-# TimelineDisplayManager.py (Phase 3修正版)  
-from PyQt6.QtWidgets import QWidget, QScrollArea, QVBoxLayout, QLabel    
-from PyQt6.QtCore import pyqtSignal    
-from typing import List, Dict, Optional    
-    
-from TimelineRenderer import TimelineRenderer    
-from TimelineInteractionHandler import TimelineInteractionHandler    
-from TimelineEventCoordinator import TimelineEventCoordinator    
-from TimelineData import TimelineData  
-from DetectionInterval import DetectionInterval    
-from Results import QueryResults    
-from STTDataStructures import QueryParser, QueryValidationError    
-    
-class TimelineDisplayManager(QWidget):    
-    """複数タイムラインの管理を担当するクラス"""    
-        
-    # 統合シグナル定義    
-    intervalClicked = pyqtSignal(object, object)  # (interval, query_result)    
-    intervalDragStarted = pyqtSignal(DetectionInterval)    
-    intervalDragMoved = pyqtSignal(DetectionInterval, float, float)    
-    intervalDragFinished = pyqtSignal(DetectionInterval, float, float)    
-    newIntervalCreated = pyqtSignal(float, float, str)  # start_time, end_time, timeline_type    
-    timePositionChanged = pyqtSignal(float)    
-        
-    def __init__(self):    
-        super().__init__()    
-            
-        # コンポーネント初期化    
-        self.renderer = TimelineRenderer()    
-        self.interaction_handler = TimelineInteractionHandler()    
-        self.event_coordinator = TimelineEventCoordinator()    
-            
-        # UI要素    
-        self.timeline_widgets: List[QWidget] = []    
-        self.scroll_area = QScrollArea()    
-        self.content_widget = QWidget()    
-        self.layout = QVBoxLayout()    
-            
-        # 状態管理    
-        self.video_duration = 0.0    
-        self.current_playhead_position = 0.0    
-        self.confidence_threshold = 0.0    
-            
-        self.setup_ui()    
-        self.setup_connections()    
-        
-    def setup_ui(self):    
-        """UIレイアウトの設定"""    
-        self.content_widget.setLayout(self.layout)    
-        self.scroll_area.setWidget(self.content_widget)    
-        self.scroll_area.setWidgetResizable(True)    
-            
-        main_layout = QVBoxLayout()    
-        main_layout.addWidget(self.scroll_area)    
-        self.setLayout(main_layout)    
-        
-    def setup_connections(self):    
-        """シグナル接続の設定"""    
-        # TimelineEventCoordinatorのシグナルを転送    
-        self.event_coordinator.intervalClicked.connect(self.intervalClicked)    
-        self.event_coordinator.intervalDragStarted.connect(self.intervalDragStarted)    
-        self.event_coordinator.intervalDragMoved.connect(self.intervalDragMoved)    
-        self.event_coordinator.intervalDragFinished.connect(self.intervalDragFinished)    
-        self.event_coordinator.newIntervalCreated.connect(self.newIntervalCreated)    
-        self.event_coordinator.timePositionChanged.connect(self.timePositionChanged)    
-    
-    def interaction_handler_connections(self, _interaction_handler: TimelineInteractionHandler):    
-        """インタラクションハンドラのシグナル接続を設定"""    
-        _interaction_handler.intervalClicked.connect(    
-            lambda interval: self.event_coordinator._handle_interval_clicked("main", interval, "default")    
-        )    
-        _interaction_handler.intervalDragStarted.connect(    
-            lambda interval: self.event_coordinator._handle_interval_drag_started("main", interval)    
-        )    
-        _interaction_handler.intervalDragMoved.connect(    
-            lambda interval, start, end: self.event_coordinator._handle_interval_drag_moved("main", interval, start, end)    
-        )    
-        _interaction_handler.intervalDragFinished.connect(    
-            lambda interval, start, end: self.event_coordinator._handle_interval_drag_finished("main", interval, start, end)    
-        )    
-        _interaction_handler.timePositionChanged.connect(    
-            lambda time: self.event_coordinator._handle_time_position_changed("main", time)    
-        )    
-        _interaction_handler.newIntervalCreated.connect(  
-            lambda start, end, timeline_type: self.event_coordinator._handle_new_interval_created("main", start, end, timeline_type)  
-        )
-        _interaction_handler.cursorChanged.connect(  
-            lambda cursor: self._update_widget_cursor(cursor)  
-        )
-
-    def set_query_results(self, query_results_list: List[QueryResults],     
-                         stt_data_manager=None, video_name: str = None):    
-        """クエリ結果を設定してタイムラインを作成"""    
-        # 現在の再生位置を保存    
-        current_playhead_position = getattr(self, 'current_playhead_position', 0.0)    
-            
-        # 既存のタイムラインをクリア    
-        self.clear_timelines()    
-            
-        # 1. Stepsタイムラインを最初に追加    
-        steps_timeline = self.create_steps_timeline(stt_data_manager, video_name)    
-        if steps_timeline:    
-            self.timeline_widgets.append(steps_timeline)    
-            self.layout.addWidget(steps_timeline)    
-            
-        # 2. 手の種類別タイムライン    
-        hand_type_groups = self._group_results_by_hand_type(query_results_list)    
-            
-        for hand_type, queries in hand_type_groups.items():    
-            if queries:  # クエリがある場合のみタイムラインを作成    
-                timeline_widget = self.create_hand_type_timeline(hand_type, queries)    
-                self.timeline_widgets.append(timeline_widget)    
-                self.layout.addWidget(timeline_widget)    
-            
-        # 動画の長さが既に設定されている場合は、全タイムラインに適用    
-        if self.video_duration > 0:    
-            self.set_video_duration(self.video_duration)    
-            # 保存していた再生位置を復元    
-            if current_playhead_position > 0:    
-                self.update_playhead_position(current_playhead_position)    
-        
-    def create_hand_type_timeline(self, hand_type: str, query_results: List[QueryResults]) -> QWidget:    
-        """手の種類毎のタイムラインウィジェットを作成"""    
-        container = QWidget()    
-        container_layout = QVBoxLayout()    
-            
-        # 手の種類のラベル    
-        hand_label = QLabel(f"Hand Type: {hand_type}")    
-        hand_label.setStyleSheet("font-weight: bold; padding: 3px; background-color: #e0e0e0; font-size: 12px;")    
-        container_layout.addWidget(hand_label)    
-            
-        # タイムラインビューア（新しいアーキテクチャ）    
-        timeline_widget = self._create_timeline_widget(hand_type, query_results)    
-        container_layout.addWidget(timeline_widget)    
-            
-        # クエリリスト表示    
-        # タイムライン上のすべてのIntervalからquery_textを収集  
-        all_intervals = []  
-        for query_result in query_results:  
-            intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
-            all_intervals.extend(intervals)  
-        
-        # 各Intervalの独立したquery_textを収集  
-        unique_query_texts = set()  
-        for interval in all_intervals:  
-            if hasattr(interval, 'query_result') and hasattr(interval.query_result, 'query_text'):  
-                unique_query_texts.add(interval.query_result.query_text)  
-        
-        query_list_label = QLabel(f"Queries: {', '.join(sorted(unique_query_texts))}")
-        query_list_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")    
-        query_list_label.setWordWrap(True)    
-        container_layout.addWidget(query_list_label)    
-            
-        container.setLayout(container_layout)    
-            
-        # イベントコーディネーターに登録    
-        timeline_id = f"hand_type_{hand_type}"    
-        self.event_coordinator.register_timeline(timeline_id, timeline_widget, hand_type)    
-            
-        return container    
-        
-    def create_steps_timeline(self, stt_data_manager, video_name: str) -> Optional[QWidget]:    
-        """Stepsタイムラインウィジェットを作成"""    
-        container = QWidget()    
-        container_layout = QVBoxLayout()    
-            
-        # Stepsラベル    
-        steps_label = QLabel("Steps")    
-        steps_label.setStyleSheet("font-weight: bold; padding: 3px; background-color: #d0e0d0; font-size: 12px;")    
-        container_layout.addWidget(steps_label)    
-            
-        # ステップデータを取得    
-        step_intervals = self._get_step_intervals(stt_data_manager, video_name)    
-            
-        # タイムラインウィジェット作成    
-        timeline_widget = self._create_timeline_widget("Steps", [], step_intervals)    
-        container_layout.addWidget(timeline_widget)    
-            
-        # Steps一覧表示 各Intervalのquery_textから生成  
-        if step_intervals:  
-            query_texts = []  
-            for interval in step_intervals:  
-                if hasattr(interval, 'query_result') and hasattr(interval.query_result, 'query_text'):  
-                    query_texts.append(interval.query_result.query_text)  
-            steps_list_label = QLabel(f"Steps: {', '.join(query_texts)}")  
-        else:  
-            steps_list_label = QLabel("Steps: No steps defined")
-            
-        steps_list_label.setStyleSheet("font-size: 10px; color: #666; padding: 2px;")    
-        steps_list_label.setWordWrap(True)    
-        container_layout.addWidget(steps_list_label)    
-            
-        container.setLayout(container_layout)    
-            
-        # イベントコーディネーターに登録    
-        self.event_coordinator.register_timeline("steps", timeline_widget, "Steps")    
-            
-        return container    
-        
-    def _create_timeline_widget(self, timeline_type: str, query_results: List[QueryResults] = None,     
-                               step_intervals: List[DetectionInterval] = None) -> QWidget:    
-        """新しいアーキテクチャでタイムラインウィジェットを作成"""    
-        from PyQt6.QtWidgets import QWidget    
-        from PyQt6.QtGui import QPaintEvent    
-
-        # TimelineInteractionHandlerにタイムライン種別を渡す  
-        interaction_handler = TimelineInteractionHandler(timeline_type) 
-        # 個別にシグナル接続を設定
-        self.interaction_handler_connections(interaction_handler)
-
-        class TimelineWidget(QWidget):    
-            def __init__(self, parent_manager, timeline_type, query_results=None, step_intervals=None):    
-                super().__init__()    
-                self.parent_manager = parent_manager    
-                self.timeline_type = timeline_type    
-                self.timeline_data = TimelineData()
-                self.timeline_type = timeline_type
-                self.interaction_handler = interaction_handler
-                    
-                # データ設定    
-                if step_intervals:    
-                    self.timeline_data.intervals = step_intervals    
-                elif query_results:  
-                    all_intervals = []  
-                    for query_result in query_results:  
-                        intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
-                        # 各Intervalが独立したQueryResultsを持つことを確認  
-                        for interval in intervals:  
-                            if hasattr(interval, 'query_result') and interval.query_result:  
-                                # Intervalが独立したQueryResultsを持っている場合はそのまま使用  
-                                all_intervals.append(interval)  
-                            else:  
-                                # 古い形式の場合は、独立したQueryResultsを作成  
-                                import copy  
-                                independent_query_result = copy.deepcopy(query_result)  
-                                independent_query_result.relevant_windows = [interval]  
-                                interval.query_result = independent_query_result  
-                                all_intervals.append(interval)  
-                    self.timeline_data.intervals = all_intervals
-                    
-                self.setMinimumHeight(50)    
-                self.setMaximumHeight(75)    
-                self.setMouseTracking(True)    
-                    
-                # 動画の長さを設定    
-                if parent_manager.video_duration > 0:    
-                    self.timeline_data.video_duration = parent_manager.video_duration    
-                    self.timeline_data.time_scale_enabled = True    
-                    
-                self.timeline_data.confidence_threshold = parent_manager.confidence_threshold    
-                
-            def paintEvent(self, event: QPaintEvent):    
-                from PyQt6.QtGui import QPainter    
-                painter = QPainter(self)    
-                rect = self.rect()    
-                self.parent_manager.renderer.render_timeline(painter, rect, self.timeline_data)    
-                
-            def mousePressEvent(self, event):    
-                self.interaction_handler.handle_mouse_press(    
-                    event, self.timeline_data, self.width()    
-                )    
-                self.update()    
-                
-            def mouseMoveEvent(self, event):    
-                self.interaction_handler.handle_mouse_move(    
-                    event, self.timeline_data, self.width()    
-                )    
-                self.update()    
-                
-            def mouseReleaseEvent(self, event):  
-                self.interaction_handler.handle_mouse_release(  
-                    event, self.timeline_data, self.width()  
-                )  
-                self.update()
-                
-            def set_video_duration(self, duration: float):    
-                self.timeline_data.video_duration = duration    
-                self.timeline_data.time_scale_enabled = True    
-                self.update()    
-                
-            def update_playhead_position(self, position: float):    
-                self.timeline_data.current_position = position    
-                self.update()    
-                
-            def set_confidence_threshold(self, threshold: float):    
-                self.timeline_data.confidence_threshold = threshold    
-                self.update()    
-                
-            def set_highlighted_interval(self, interval: DetectionInterval):    
-                self.timeline_data.highlighted_interval = interval    
-                self.update()    
-            
-        return TimelineWidget(self, timeline_type, query_results, step_intervals)    
-        
-    def _group_results_by_hand_type(self, query_results_list: List[QueryResults]) -> Dict[str, List[QueryResults]]:    
-        """結果をHand Type毎にグループ化"""    
-        hand_type_groups = {    
-            'LeftHand': [],    
-            'RightHand': [],    
-            'BothHands': [],    
-            'None': []    
-        }    
-            
-        for query_result in query_results_list:    
-            try:    
-                hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)    
-                if hand_type in hand_type_groups:    
-                    hand_type_groups[hand_type].append(query_result)    
-            except QueryValidationError:    
-                hand_type_groups['None'].append(query_result)    
-            
-        return hand_type_groups    
-        
-    def _get_step_intervals(self, stt_data_manager, video_name: str) -> List[DetectionInterval]:    
-        """STTデータからステップ区間を取得"""    
-        step_intervals = []    
-        if (stt_data_manager and video_name and     
-            video_name in stt_data_manager.stt_dataset.database):    
-            video_data = stt_data_manager.stt_dataset.database[video_name]    
-            for step in video_data.steps:    
-                if len(step.segment) >= 2:    
-                    interval = DetectionInterval(    
-                        start_time=step.segment[0],    
-                        end_time=step.segment[1],    
-                        confidence_score=1.0,    
-                        label=step.step    
-                    )    
-                    # Steps用の疑似QueryResultsを作成して埋め込み    
-                    step_query_result = type('StepQueryResult', (), {    
-                        'query_text': f"Step: {step.step}",
-                        'video_id': video_name,    
-                        'relevant_windows': [interval]    
-                    })()    
-                    interval.query_result = step_query_result    
-                    step_intervals.append(interval)    
-            
-        return step_intervals    
+# TimelineDisplayManager.py (リファクタリング版)  
+import logging  
+from typing import List, Optional, Dict, Any  
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QScrollArea  
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer  
+from PyQt6.QtGui import QPainter, QColor, QPen, QBrush  
   
-    def clear_timelines(self):    
-        """既存のタイムラインをクリア"""    
-        for widget in self.timeline_widgets:    
-            self.layout.removeWidget(widget)    
-            widget.deleteLater()    
-        self.timeline_widgets.clear()    
-        # イベントコーディネーターもクリア    
-        for timeline_id in list(self.event_coordinator.registered_timelines.keys()):    
-            self.event_coordinator.unregister_timeline(timeline_id)    
-        
-    def set_video_duration(self, duration: float):    
-        """動画の長さを設定し、既存の全タイムラインに適用"""    
-        self.video_duration = duration    
-            
-        for widget in self.timeline_widgets:    
-            timeline = self._find_timeline_widget(widget)    
-            if timeline:    
-                timeline.set_video_duration(duration)    
-        
-    def update_playhead_position(self, position: float):    
-        """プレイヘッド位置を更新"""    
-        self.current_playhead_position = position    
-            
-        for widget in self.timeline_widgets:    
-            timeline = self._find_timeline_widget(widget)    
-            if timeline:    
-                timeline.update_playhead_position(position)    
-        
-    def set_confidence_threshold(self, threshold: float):    
-        """全てのタイムラインにconfidence閾値を設定"""    
-        self.confidence_threshold = threshold    
-            
-        for widget in self.timeline_widgets:    
-            timeline = self._find_timeline_widget(widget)    
-            if timeline:    
-                timeline.set_confidence_threshold(threshold)    
-        
-    def set_highlighted_interval(self, interval: DetectionInterval):    
-        """指定された区間をハイライト"""    
-        for widget in self.timeline_widgets:    
-            timeline = self._find_timeline_widget(widget)    
-            if timeline:    
-                timeline.set_highlighted_interval(interval)    
+from UnifiedDataController import UnifiedDataController  
+from UnifiedInterval import UnifiedInterval  
+from VideoInfo import VideoInfo  
+  
+logger = logging.getLogger(__name__)  
+  
+class TimelineDisplayManager(QObject):  
+    """タイムライン表示管理クラス（リファクタリング版）"""  
       
-    # Phase 3で追加された機能拡張メソッド  
-    def on_interval_clicked_with_embedded_query(self, interval, timeline_type: str = None):  
-        """区間クリック時の埋め込みクエリ処理（古いMultiTimelineViewerの機能移行）"""  
-        # 区間に埋め込まれたクエリ結果を取得  
-        embedded_query_result = None  
-          
-        if hasattr(interval, 'query_result'):  
-            embedded_query_result = interval.query_result  
-        elif timeline_type == "Steps":  
-            # Stepsタイムラインの場合、疑似QueryResultsを作成  
-            embedded_query_result = type('StepQueryResult', (), {  
-                'query_text': f"Step: {interval.label}",  
-                'video_id': getattr(interval, 'video_id', 'unknown'),  
-                'relevant_windows': [interval]  
-            })()  
-          
-        # 通常の区間クリックシグナルを発信  
-        self.intervalClicked.emit(interval, embedded_query_result)  
-          
-        # 特殊な処理が必要な場合のフック  
-        self._handle_special_interval_click(interval, embedded_query_result, timeline_type)  
+    # シグナル定義  
+    intervalClicked = pyqtSignal(object)  # UnifiedInterval  
+    playheadMoved = pyqtSignal(float)  # position in seconds  
+    timelineUpdated = pyqtSignal()  
       
-    def _handle_special_interval_click(self, interval, query_result, timeline_type: str):  
-        """特殊な区間クリック処理（拡張ポイント）"""  
-        # ステップ区間の場合の特別処理  
-        if timeline_type == "Steps":  
-            self._handle_step_interval_click(interval, query_result)  
+    def __init__(self):  
+        super().__init__()  
           
-        # その他の特殊処理をここに追加可能  
+        # データ参照  
+        self.unified_data_controller: Optional[UnifiedDataController] = None  
+          
+        # タイムライン表示設定  
+        self.timeline_widgets: List[QWidget] = []  
+        self.current_video_duration: float = 0.0  
+        self.current_playhead_position: float = 0.0  
+        self.highlighted_interval: Optional[UnifiedInterval] = None  
+          
+        # 表示設定  
+        self.pixels_per_second: float = 50.0  
+        self.timeline_height: int = 60  
+        self.action_timeline_color = QColor(100, 150, 255)  
+        self.step_timeline_color = QColor(255, 150, 100)  
+        self.playhead_color = QColor(255, 0, 0)  
+          
+        # 更新タイマー  
+        self.update_timer = QTimer()  
+        self.update_timer.setSingleShot(True)  
+        self.update_timer.timeout.connect(self._perform_update)  
+          
+        logger.info("TimelineDisplayManager initialized (refactored)")  
       
-    def _handle_step_interval_click(self, interval, query_result):  
-        """ステップ区間クリック時の特別処理"""  
-        # ステップ編集モードへの切り替えなど  
-        if hasattr(self.parent(), 'edit_widget_manager'):  
-            edit_manager = self.parent().edit_widget_manager  
-            if hasattr(edit_manager, 'switch_to_step_tab'):  
-                edit_manager.switch_to_step_tab()  
+    def set_unified_data_controller(self, controller: UnifiedDataController):  
+        """統一データコントローラーを設定"""  
+        self.unified_data_controller = controller  
+          
+        # データ変更シグナルを接続  
+        controller.dataUpdated.connect(self.on_data_updated)  
+        controller.intervalAdded.connect(self.on_intervals_changed)  
+        controller.intervalModified.connect(self.on_intervals_changed)  
+        controller.intervalDeleted.connect(self.on_intervals_changed)  
+          
+        logger.info("UnifiedDataController set to TimelineDisplayManager")  
       
-    def clear_highlighted_intervals(self):  
-        """全てのハイライトをクリア"""  
+    def create_timeline_widgets(self, parent_widget: QWidget) -> QWidget:  
+        """タイムラインウィジェットを作成"""  
+        main_widget = QWidget(parent_widget)  
+        layout = QVBoxLayout(main_widget)  
+          
+        # アクションタイムライン  
+        action_timeline = self._create_single_timeline("Actions", "action")  
+        layout.addWidget(action_timeline)  
+          
+        # ステップタイムライン  
+        step_timeline = self._create_single_timeline("Steps", "step")  
+        layout.addWidget(step_timeline)  
+          
+        # スクロールエリアに配置  
+        scroll_area = QScrollArea()  
+        scroll_area.setWidget(main_widget)  
+        scroll_area.setWidgetResizable(True)  
+        scroll_area.setMinimumHeight(200)  
+          
+        self.timeline_widgets = [action_timeline, step_timeline]  
+          
+        logger.info("Timeline widgets created")  
+        return scroll_area  
+      
+    def _create_single_timeline(self, title: str, interval_type: str) -> QWidget:  
+        """単一のタイムラインウィジェットを作成"""  
+        timeline_widget = TimelineWidget(title, interval_type, self)  
+        timeline_widget.setMinimumHeight(self.timeline_height)  
+        timeline_widget.intervalClicked.connect(self.on_interval_clicked)  
+        timeline_widget.playheadMoved.connect(self.on_playhead_moved)  
+          
+        return timeline_widget  
+      
+    def update_all_timelines(self):  
+        """全タイムラインを更新"""  
+        logger.info("Updating all timelines")  
+          
+        # タイマーを使用して更新を遅延実行（連続更新を防ぐ）  
+        self.update_timer.stop()  
+        self.update_timer.start(50)  # 50ms後に更新  
+      
+    def _perform_update(self):  
+        """実際の更新処理"""  
+        if not self.unified_data_controller:  
+            return  
+          
+        # 各タイムラインウィジェットを更新  
         for widget in self.timeline_widgets:  
-            timeline = self._find_timeline_widget(widget)  
-            if timeline and hasattr(timeline, 'set_highlighted_interval'):  
-                timeline.set_highlighted_interval(None)  
+            if hasattr(widget, 'update_display'):  
+                widget.update_display()  
+          
+        self.timelineUpdated.emit()  
+        logger.info("Timeline display updated")  
       
-    def get_timeline_by_type(self, timeline_type: str):  
-        """タイプ別にタイムラインを取得"""  
+    def set_video_duration(self, duration: float):  
+        """動画の長さを設定"""  
+        self.current_video_duration = duration  
+          
+        # 各タイムラインウィジェットに通知  
         for widget in self.timeline_widgets:  
-            # コンテナ内の実際のTimelineWidgetを検索  
-            timeline_widget = self._find_timeline_widget(widget)  
-            if timeline_widget and hasattr(timeline_widget, 'timeline_type') and timeline_widget.timeline_type == timeline_type:  
-                return timeline_widget  
-        return None
+            if hasattr(widget, 'set_duration'):  
+                widget.set_duration(duration)  
+          
+        logger.info(f"Video duration set to: {duration} seconds")  
       
-    def update_timeline_data(self, timeline_type: str, data):  
-        """特定のタイムラインのデータを更新"""  
-        timeline = self.get_timeline_by_type(timeline_type)  
-        if timeline:  
-            timeline_widget = self._find_timeline_widget(timeline)  
-            if timeline_widget and hasattr(timeline_widget, 'timeline_data'):  
-                if timeline_type == "Steps":  
-                    timeline_widget.timeline_data.intervals = data  
-                else:  
-                    # クエリ結果の場合  
-                    all_intervals = []  
-                    for query_result in data:  
-                        intervals = query_result.relevant_windows if hasattr(query_result, 'relevant_windows') else []  
-                        all_intervals.extend(intervals)  
-                    timeline_widget.timeline_data.intervals = all_intervals  
-                  
-                timeline_widget.update()  
-        
-    def _find_timeline_widget(self, container_widget: QWidget):    
-        """コンテナウィジェット内のTimelineWidgetを検索"""    
-        # コンテナの子ウィジェットからTimelineWidgetを探す    
-        for child in container_widget.findChildren(QWidget):    
-            if hasattr(child, 'timeline_data'):    
-                return child    
-        return None    
-        
-    def get_timeline_count(self) -> int:    
-        """現在のタイムライン数を取得"""    
-        return len(self.timeline_widgets)    
-        
-    def get_event_coordinator(self) -> TimelineEventCoordinator:    
-        """イベントコーディネーターを取得"""    
-        return self.event_coordinator    
-        
-    def get_renderer(self) -> TimelineRenderer:    
-        """レンダラーを取得"""    
-        return self.renderer    
-        
-    def get_interaction_handler(self) -> TimelineInteractionHandler:    
-        """インタラクションハンドラーを取得"""    
-        return self.interaction_handler    
-        
-    def update_all_timelines(self):    
-        """全てのタイムラインを更新"""    
-        for widget in self.timeline_widgets:    
-            timeline = self._find_timeline_widget(widget)    
-            if timeline:    
-                timeline.update()    
-        
-    def handle_timeline_events(self, event_type: str, **kwargs):    
-        """タイムラインイベントを処理"""    
-        if event_type == "interval_clicked":    
-            interval = kwargs.get('interval')    
-            query_result = kwargs.get('query_result')    
-            self.intervalClicked.emit(interval, query_result)    
-            
-        elif event_type == "interval_drag_started":    
-            interval = kwargs.get('interval')    
-            self.intervalDragStarted.emit(interval)    
-            
-        elif event_type == "interval_drag_moved":    
-            interval = kwargs.get('interval')    
-            start = kwargs.get('start')    
-            end = kwargs.get('end')    
-            self.intervalDragMoved.emit(interval, start, end)    
-            
-        elif event_type == "interval_drag_finished":    
-            interval = kwargs.get('interval')    
-            start = kwargs.get('start')    
-            end = kwargs.get('end')    
-            self.intervalDragFinished.emit(interval, start, end)    
-            
-        elif event_type == "new_interval_created":    
-            start = kwargs.get('start')    
-            end = kwargs.get('end')    
-            timeline_type = kwargs.get('timeline_type', 'default')    
-            self.newIntervalCreated.emit(start, end, timeline_type)    
-            
-        elif event_type == "time_position_changed":    
-            time = kwargs.get('time')    
-            self.timePositionChanged.emit(time)    
+    def update_playhead_position(self, position: float):  
+        """プレイヘッド位置を更新"""  
+        self.current_playhead_position = position  
+          
+        # 各タイムラインウィジェットのプレイヘッドを更新  
+        for widget in self.timeline_widgets:  
+            if hasattr(widget, 'set_playhead_position'):  
+                widget.set_playhead_position(position)  
+          
+        # 必要に応じてスクロール位置を調整  
+        self._auto_scroll_to_playhead(position)  
+      
+    def set_highlighted_interval(self, interval: UnifiedInterval):  
+        """ハイライト表示する区間を設定"""  
+        self.highlighted_interval = interval  
+          
+        # 各タイムラインウィジェットにハイライト情報を通知  
+        for widget in self.timeline_widgets:  
+            if hasattr(widget, 'set_highlighted_interval'):  
+                widget.set_highlighted_interval(interval)  
+          
+        logger.info(f"Highlighted interval set: {interval.interval_id}")  
+      
+    def clear_highlighted_interval(self):  
+        """ハイライト表示をクリア"""  
+        self.highlighted_interval = None  
+          
+        for widget in self.timeline_widgets:  
+            if hasattr(widget, 'clear_highlighted_interval'):  
+                widget.clear_highlighted_interval()  
+          
+        logger.info("Highlighted interval cleared")  
+      
+    def _auto_scroll_to_playhead(self, position: float):  
+        """プレイヘッド位置に自動スクロール"""  
+        # スクロールエリアがある場合の自動スクロール処理  
+        # 実装は必要に応じて追加  
+        pass  
+      
+    def get_intervals_for_timeline(self, interval_type: str) -> List[UnifiedInterval]:  
+        """指定タイプの区間を取得"""  
+        if not self.unified_data_controller:  
+            return []  
+          
+        filtered_intervals = self.unified_data_controller.get_filtered_intervals()  
+        return [interval for interval in filtered_intervals   
+                if interval.interval_type == interval_type]  
+      
+    def on_data_updated(self):  
+        """データ更新時の処理"""  
+        self.update_all_timelines()  
+      
+    def on_intervals_changed(self, interval_id: str = ""):  
+        """区間変更時の処理"""  
+        self.update_all_timelines()  
+      
+    def on_interval_clicked(self, interval: UnifiedInterval):  
+        """区間クリック時の処理"""  
+        logger.info(f"Interval clicked: {interval.interval_id}")  
+        self.set_highlighted_interval(interval)  
+        self.intervalClicked.emit(interval)  
+      
+    def on_playhead_moved(self, position: float):  
+        """プレイヘッド移動時の処理"""  
+        self.update_playhead_position(position)  
+        self.playheadMoved.emit(position)  
+      
+    def get_current_state(self) -> Dict[str, Any]:  
+        """現在の状態を取得（デバッグ用）"""  
+        return {  
+            'video_duration': self.current_video_duration,  
+            'playhead_position': self.current_playhead_position,  
+            'highlighted_interval_id': self.highlighted_interval.interval_id if self.highlighted_interval else None,  
+            'timeline_widgets_count': len(self.timeline_widgets),  
+            'pixels_per_second': self.pixels_per_second,  
+            'has_unified_data_controller': self.unified_data_controller is not None  
+        }  
+  
+  
+class TimelineWidget(QWidget):  
+    """個別のタイムラインウィジェット"""  
+      
+    intervalClicked = pyqtSignal(object)  # UnifiedInterval  
+    playheadMoved = pyqtSignal(float)  # position  
+      
+    def __init__(self, title: str, interval_type: str, manager: TimelineDisplayManager):  
+        super().__init__()  
+        self.title = title  
+        self.interval_type = interval_type  
+        self.manager = manager  
+          
+        # 表示状態  
+        self.duration = 0.0  
+        self.playhead_position = 0.0  
+        self.highlighted_interval: Optional[UnifiedInterval] = None  
+          
+        # 描画設定  
+        self.background_color = QColor(240, 240, 240)  
+        self.interval_color = manager.action_timeline_color if interval_type == "action" else manager.step_timeline_color  
+        self.highlight_color = QColor(255, 255, 0, 100)  
+          
+        self.setMinimumHeight(manager.timeline_height)  
+          
+        logger.info(f"TimelineWidget created: {title} ({interval_type})")  
+      
+    def set_duration(self, duration: float):  
+        """動画の長さを設定"""  
+        self.duration = duration  
+        self.update()  
+      
+    def set_playhead_position(self, position: float):  
+        """プレイヘッド位置を設定"""  
+        self.playhead_position = position  
+        self.update()  
+      
+    def set_highlighted_interval(self, interval: UnifiedInterval):  
+        """ハイライト区間を設定"""  
+        if interval.interval_type == self.interval_type:  
+            self.highlighted_interval = interval  
+            self.update()  
+      
+    def clear_highlighted_interval(self):  
+        """ハイライトをクリア"""  
+        self.highlighted_interval = None  
+        self.update()  
+      
+    def update_display(self):  
+        """表示を更新"""  
+        self.update()  
+      
+    def paintEvent(self, event):  
+        """描画イベント"""  
+        painter = QPainter(self)  
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)  
+          
+        # 背景を描画  
+        painter.fillRect(self.rect(), self.background_color)  
+          
+        # タイトルを描画  
+        painter.setPen(QPen(QColor(0, 0, 0)))  
+        painter.drawText(10, 20, self.title)  
+          
+        if self.duration <= 0:  
+            return  
+          
+        # 区間を描画  
+        self._draw_intervals(painter)  
+          
+        # プレイヘッドを描画  
+        self._draw_playhead(painter)  
+          
+        # ハイライト区間を描画  
+        if self.highlighted_interval:  
+            self._draw_highlighted_interval(painter)  
+      
+    def _draw_intervals(self, painter: QPainter):  
+        """区間を描画"""  
+        if not self.manager.unified_data_controller:  
+            return  
+          
+        intervals = self.manager.get_intervals_for_timeline(self.interval_type)  
+          
+        painter.setPen(QPen(self.interval_color, 2))  
+        painter.setBrush(QBrush(self.interval_color))  
+          
+        timeline_y = 30  
+        timeline_height = 20  
+          
+        for interval in intervals:  
+            start_x = self._time_to_pixel(interval.start_time)  
+            end_x = self._time_to_pixel(interval.end_time)  
+            width = max(end_x - start_x, 2)  # 最小幅2ピクセル  
+              
+            # 区間の矩形を描画  
+            painter.drawRect(start_x, timeline_y, width, timeline_height)  
+              
+            # 信頼度に応じて透明度を調整  
+            alpha = int(255 * interval.confidence_score)  
+            color_with_alpha = QColor(self.interval_color)  
+            color_with_alpha.setAlpha(alpha)  
+            painter.setBrush(QBrush(color_with_alpha))  
+      
+    def _draw_playhead(self, painter: QPainter):  
+        """プレイヘッドを描画"""  
+        playhead_x = self._time_to_pixel(self.playhead_position)  
+          
+        painter.setPen(QPen(self.manager.playhead_color, 2))  
+        painter.drawLine(playhead_x, 0, playhead_x, self.height())  
+      
+    def _draw_highlighted_interval(self, painter: QPainter):  
+        """ハイライト区間を描画"""  
+        if not self.highlighted_interval:  
+            return  
+          
+        start_x = self._time_to_pixel(self.highlighted_interval.start_time)  
+        end_x = self._time_to_pixel(self.highlighted_interval.end_time)  
+        width = max(end_x - start_x, 2)  
+          
+        painter.setPen(QPen(self.highlight_color, 3))  
+        painter.setBrush(QBrush(self.highlight_color))  
+        painter.drawRect(start_x, 25, width, 30)  
+      
+    def _time_to_pixel(self, time_seconds: float) -> int:  
+        """時間をピクセル座標に変換"""  
+        return int(time_seconds * self.manager.pixels_per_second)  
+      
+    def _pixel_to_time(self, pixel_x: int) -> float:  
+        """ピクセル座標を時間に変換"""  
+        return pixel_x / self.manager.pixels_per_second  
+      
+    def mousePressEvent(self, event):  
+        """マウスクリックイベント"""  
+        click_time = self._pixel_to_time(event.position().x())  
+          
+        # クリックされた区間を検索  
+        clicked_interval = self._find_interval_at_position(click_time)  
+          
+        if clicked_interval:  
+            self.intervalClicked.emit(clicked_interval)  
+        else:  
+            # 空白領域クリック時はプレイヘッド移動  
+            self.playheadMoved.emit(click_time)  
+      
+    def _find_interval_at_position(self, time: float) -> Optional[UnifiedInterval]:  
+        """指定時間位置にある区間を検索"""  
+        if not self.manager.unified_data_controller:  
+            return None  
+          
+        intervals = self.manager.get_intervals_for_timeline(self.interval_type)  
+          
+        for interval in intervals:  
+            if interval.start_time <= time <= interval.end_time:  
+                return interval  
+          
+        return None  
+      
+    def mouseMoveEvent(self, event):  
+        """マウス移動イベント"""  
+        # ホバー処理やドラッグ処理を実装  
+        pass  
+      
+    def mouseReleaseEvent(self, event):  
+        """マウスリリースイベント"""  
+        # ドラッグ終了処理を実装  
+        pass
 
+    def set_query_results(self, query_results_list=None, stt_data_manager=None, video_name: str = None):  
+        """既存のインターフェースとの互換性を保つメソッド"""  
+        # 既存のコードとの互換性のため、このメソッドは残すが内部的には統一データコントローラーを使用  
+        logger.info("set_query_results called (compatibility method)")  
+          
+        if self.unified_data_controller:  
+            # 統一データコントローラーが設定されている場合は、そちらのデータを使用  
+            self.update_all_timelines()  
+        else:  
+            logger.warning("UnifiedDataController not set, cannot update timelines")  
+      
+    def clear_timelines(self):  
+        """タイムラインをクリア"""  
+        for widget in self.timeline_widgets:  
+            widget.deleteLater()  
+          
+        self.timeline_widgets.clear()  
+        logger.info("Timelines cleared")  
+      
+    def create_steps_timeline(self, stt_data_manager=None, video_name: str = None) -> Optional[QWidget]:  
+        """ステップタイムライン作成（互換性メソッド）"""  
+        # 統一データコントローラーからステップデータを取得  
+        if not self.unified_data_controller:  
+            return None  
+          
+        return self._create_single_timeline("Steps", "step")  
+      
+    def _group_results_by_hand_type(self, query_results_list) -> Dict[str, List]:  
+        """手タイプ別グループ化（互換性メソッド）"""  
+        # 統一データコントローラーを使用する場合は不要だが、互換性のため残す  
+        return {"All": []}  
+      
+    def set_confidence_threshold(self, threshold: float):  
+        """信頼度閾値設定"""  
+        if self.unified_data_controller:  
+            self.unified_data_controller.set_confidence_threshold(threshold)  
+          
+        # 各タイムラインウィジェットに通知  
+        for widget in self.timeline_widgets:  
+            if hasattr(widget, 'set_confidence_threshold'):  
+                widget.set_confidence_threshold(threshold)  
+      
     def _update_widget_cursor(self, cursor):  
-        """ウィジェットのカーソルを更新"""  
+        """ウィジェットカーソル更新"""  
         for widget in self.timeline_widgets:  
-            timeline_widget = self._find_timeline_widget(widget)  
-            if timeline_widget:  
-                timeline_widget.setCursor(cursor)
-
-    # 各タイムラインの種別を管理  
-    def setup_timeline_connections(self, timeline_widget, timeline_type):  
-        timeline_widget.newIntervalCreated.connect(  
-            lambda start, end: self.event_coordinator._handle_new_interval_created(  
-                "main", start, end, timeline_type  
-            )  
-        )
-
-    def get_current_state(self) -> dict:    
-        """現在の状態を取得（デバッグ用）"""    
-        return {    
-            'timeline_count': len(self.timeline_widgets),    
-            'video_duration': self.video_duration,    
-            'current_playhead_position': self.current_playhead_position,    
-            'confidence_threshold': self.confidence_threshold,    
-            'registered_timelines': list(self.event_coordinator.registered_timelines.keys()),    
-            'active_timeline': self.event_coordinator.get_active_timeline()    
-        }
+            widget.setCursor(cursor)
