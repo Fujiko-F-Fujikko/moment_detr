@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import List, Union
 from datetime import datetime
 
-from Results import QueryResults, InferenceResults
+from DataClasses import QueryResults, InferenceResults
 
   
 class InferenceResultsLoader:    

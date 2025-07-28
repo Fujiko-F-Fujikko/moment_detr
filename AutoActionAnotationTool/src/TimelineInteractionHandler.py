@@ -4,8 +4,7 @@ from PyQt6.QtGui import QCursor, QMouseEvent
 from PyQt6.QtCore import Qt  
 from typing import List, Optional  
 
-from DetectionInterval import DetectionInterval  
-from TimelineData import NewIntervalPreview, TimelineData
+from DataClasses import DetectionInterval, TimelineData, NewIntervalPreview
 from Utilities import show_call_stack
   
 class TimelineInteractionHandler(QObject):  

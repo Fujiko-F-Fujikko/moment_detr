@@ -6,10 +6,7 @@ from typing import List, Dict, Optional
 from TimelineRenderer import TimelineRenderer    
 from TimelineInteractionHandler import TimelineInteractionHandler    
 from TimelineEventCoordinator import TimelineEventCoordinator    
-from TimelineData import TimelineData  
-from DetectionInterval import DetectionInterval    
-from Results import QueryResults    
-from STTDataStructures import QueryParser, QueryValidationError    
+from DataClasses import QueryResults, DetectionInterval, TimelineData, QueryParser, QueryValidationError
     
 class TimelineDisplayManager(QWidget):    
     """複数タイムラインの管理を担当するクラス"""    
@@ -89,7 +86,7 @@ class TimelineDisplayManager(QWidget):
         )
 
     def set_query_results(self, query_results_list: List[QueryResults],     
-                         stt_data_manager=None, video_name: str = None):    
+                         results_data_controller=None):    
         """クエリ結果を設定してタイムラインを作成"""    
         # 現在の再生位置を保存    
         current_playhead_position = getattr(self, 'current_playhead_position', 0.0)    
@@ -98,7 +95,7 @@ class TimelineDisplayManager(QWidget):
         self.clear_timelines()    
             
         # 1. Stepsタイムラインを最初に追加    
-        steps_timeline = self.create_steps_timeline(stt_data_manager, video_name)    
+        steps_timeline = self.create_steps_timeline(results_data_controller)    
         if steps_timeline:    
             self.timeline_widgets.append(steps_timeline)    
             self.layout.addWidget(steps_timeline)    
@@ -159,7 +156,7 @@ class TimelineDisplayManager(QWidget):
             
         return container    
         
-    def create_steps_timeline(self, stt_data_manager, video_name: str) -> Optional[QWidget]:    
+    def create_steps_timeline(self, results_data_controller) -> Optional[QWidget]:    
         """Stepsタイムラインウィジェットを作成"""    
         container = QWidget()    
         container_layout = QVBoxLayout()    
@@ -170,7 +167,7 @@ class TimelineDisplayManager(QWidget):
         container_layout.addWidget(steps_label)    
             
         # ステップデータを取得    
-        step_intervals = self._get_step_intervals(stt_data_manager, video_name)    
+        step_intervals = self._get_step_intervals(results_data_controller)    
             
         # タイムラインウィジェット作成    
         timeline_widget = self._create_timeline_widget("Steps", [], step_intervals)    
@@ -311,30 +308,33 @@ class TimelineDisplayManager(QWidget):
             
         return hand_type_groups    
         
-    def _get_step_intervals(self, stt_data_manager, video_name: str) -> List[DetectionInterval]:    
-        """STTデータからステップ区間を取得"""    
-        step_intervals = []    
-        if (stt_data_manager and video_name and     
-            video_name in stt_data_manager.stt_dataset.database):    
-            video_data = stt_data_manager.stt_dataset.database[video_name]    
-            for step in video_data.steps:    
-                if len(step.segment) >= 2:    
-                    interval = DetectionInterval(    
-                        start_time=step.segment[0],    
-                        end_time=step.segment[1],    
-                        confidence_score=1.0,    
-                        label=step.step    
-                    )    
-                    # Steps用の疑似QueryResultsを作成して埋め込み    
-                    step_query_result = type('StepQueryResult', (), {    
-                        'query_text': f"Step: {step.step}",
-                        'video_id': video_name,    
-                        'relevant_windows': [interval]    
-                    })()    
-                    interval.query_result = step_query_result    
-                    step_intervals.append(interval)    
-            
-        return step_intervals    
+    def _get_step_intervals(self, results_data_controller) -> List[DetectionInterval]:  
+        """ResultsDataControllerからステップ区間を取得"""  
+        step_intervals = []  
+          
+        if results_data_controller:  
+            # ステップ用QueryResultsを取得（"Step:"で始まるクエリ）  
+            step_query_results = results_data_controller.get_step_query_results()  
+              
+            for query_result in step_query_results:  
+                # "Step:"プレフィックスを除去してステップテキストを取得  
+                step_text = query_result.query_text.replace("Step:", "").strip()  
+                  
+                # QueryResultsの区間情報からDetectionIntervalを作成  
+                for interval in query_result.relevant_windows:  
+                    # 新しいDetectionIntervalを作成（既存の区間をコピー）  
+                    step_interval = DetectionInterval(  
+                        start_time=interval.start_time,  
+                        end_time=interval.end_time,  
+                        confidence_score=1.0,  # ステップは常に信頼度1.0  
+                        label=step_text  
+                    )  
+                      
+                    # 元のQueryResultsを参照として設定  
+                    step_interval.query_result = query_result  
+                    step_intervals.append(step_interval)  
+          
+        return step_intervals
   
     def clear_timelines(self):    
         """既存のタイムラインをクリア"""    

@@ -1,8 +1,7 @@
 # TimelineRenderer.py  
 from PyQt6.QtGui import QPainter, QColor, QPen  
 from PyQt6.QtCore import QRect, Qt  
-from DetectionInterval import DetectionInterval  
-from TimelineData import TimelineData
+from DataClasses import DetectionInterval, TimelineData
   
 class TimelineRenderer:  
     """タイムライン描画処理に特化したクラス"""  

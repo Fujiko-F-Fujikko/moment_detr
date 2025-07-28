@@ -4,8 +4,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, Qt
 from PyQt6.QtGui import QColor
 from typing import Optional, List
 from ResultsDataController import ResultsDataController  
-from Results import QueryResults
-from STTDataStructures import QueryParser, QueryValidationError
+from DataClasses import QueryResults, QueryParser, QueryValidationError
 
 class ResultsDisplayManager(QObject):  
     """結果表示の管理を担当するクラス"""  

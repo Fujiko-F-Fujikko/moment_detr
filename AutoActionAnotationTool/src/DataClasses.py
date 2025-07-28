@@ -1,0 +1,282 @@
+from dataclasses import dataclass, field  
+from typing import List, Optional, Dict, Any, Tuple
+from datetime import datetime
+
+##########################
+## 内部データ用の構造定義 ##
+##########################
+
+@dataclass  
+class DetectionInterval:  
+    start_time: float  # seconds  
+    end_time: float   # seconds  
+    confidence_score: float  
+    query_id: Optional[int] = None  
+    label: Optional[str] = None
+    query_result: Optional[object] = None
+    interval_id: Optional[str] = None
+      
+    def __eq__(self, other):  
+        if not isinstance(other, DetectionInterval):  
+            return False  
+        return (self.start_time == other.start_time and   
+                self.end_time == other.end_time and  
+                self.confidence_score == other.confidence_score)  
+      
+    def __hash__(self):  
+        return hash((self.start_time, self.end_time, self.confidence_score))
+
+    def __post_init__(self):  
+        # 一意IDを自動生成（時間とconfidenceから）  
+        if self.interval_id is None:  
+            self.interval_id = f"{self.start_time:.3f}_{self.end_time:.3f}_{self.confidence_score:.6f}"
+    @property  
+    def duration(self) -> float:  
+        return self.end_time - self.start_time  
+      
+    def overlaps_with(self, other: 'DetectionInterval') -> bool:  
+        return not (self.end_time <= other.start_time or other.end_time <= self.start_time)
+
+@dataclass    
+class QueryResults:    
+    query_text: str    
+    video_id: str    
+    relevant_windows: List[DetectionInterval]    
+    saliency_scores: List[float]    
+    query_id: Optional[int] = None  # qidがない場合に対応  
+        
+    @classmethod
+    def from_moment_detr_json(cls, json_data: dict, index: int = 0) -> 'QueryResults':      
+        query_result = cls(      
+            query_text=json_data['query'],      
+            video_id=json_data['vid'],      
+            relevant_windows=[],  # 後で設定  
+            saliency_scores=json_data['pred_saliency_scores'],    
+            query_id=index  
+        )  
+        
+        # 区間を作成し、クエリ情報を埋め込む  
+        intervals = []  
+        for i, (start, end, score) in enumerate(json_data['pred_relevant_windows']):  
+            interval = DetectionInterval(start, end, score, index)  
+            interval.query_result = query_result  # クエリ情報を埋め込み  
+            interval.interval_id = f"{query_result.query_id}_{i}"  # 新規追加：クエリ内でのインデックス  
+            intervals.append(interval)
+        query_result.relevant_windows = intervals  
+        return query_result
+  
+@dataclass    
+class InferenceResults:    
+    results: List[QueryResults]    
+    timestamp: datetime    
+    model_info: dict  
+    video_path: Optional[str] = None  
+    total_queries: Optional[int] = None  
+        
+    def get_results_for_video(self, video_id: str) -> List[QueryResults]:    
+        return [r for r in self.results if r.video_id == video_id]
+
+##########################
+## STTデータ用の構造定義 ##
+##########################
+
+@dataclass  
+class ActionData:  
+    action_verb: str  
+    manipulated_object: Optional[str] = None  
+    target_object: Optional[str] = None  
+    tool: Optional[str] = None  
+  
+@dataclass  
+class ActionEntry:  
+    action: ActionData  
+    ids: List[int] = field(default_factory=list)  
+    id: int = 0  
+    segment: List[float] = field(default_factory=list)  
+    segment_frames: List[int] = field(default_factory=list)  
+  
+@dataclass  
+class StepEntry:  
+    step: str  
+    id: int  
+    segment: List[float] = field(default_factory=list)  
+    segment_frames: List[int] = field(default_factory=list)  
+  
+@dataclass  
+class VideoData:  
+    subset: str = "train"  # "train", "validation", "test"  
+    duration: float = 0.0  
+    fps: float = 0.0  
+    actions: Dict[str, List[ActionEntry]] = field(default_factory=lambda: {  
+        "left_hand": [],   
+        "right_hand": [],   
+        "both_hands": [],  # 新しく追加  
+        "unspecified": []  # 新しく追加  
+    })  
+    steps: List[StepEntry] = field(default_factory=list)  
+
+@dataclass  
+class ActionCategory:  
+    id: int  
+    name: str  
+  
+@dataclass  
+class StepCategory:  
+    id: int  
+    step: str  
+  
+@dataclass  
+class STTDataset:  
+    info: Dict[str, Any] = field(default_factory=lambda: {  
+        "description": "STT Dataset 2025",  
+        "version": 1.0,  
+        "data_created": datetime.now().strftime("%Y/%m/%d")  
+    })  
+    database: Dict[str, VideoData] = field(default_factory=dict)  
+    action_categories: List[ActionCategory] = field(default_factory=list)  
+    step_categories: List[StepCategory] = field(default_factory=list)  
+
+class QueryParser:  
+    # 許可される手の種類  
+    VALID_HAND_TYPES = {'LeftHand', 'RightHand', 'BothHands', 'None'}  
+      
+    @staticmethod  
+    def validate_and_parse_query(query_text: str) -> Tuple[str, ActionData]:  
+        """クエリテキストを検証し、アクション要素を抽出"""  
+        #print(f"DEBUG: Parsing query: '{query_text}'")  
+        parts = query_text.split('_')  
+        #print(f"DEBUG: Query parts: {parts} (count: {len(parts)})")  
+        
+        if len(parts) != 5:  
+            error_msg = f"クエリ形式が不正です。5つの要素が必要ですが、{len(parts)}個の要素が見つかりました: '{query_text}'"  
+            print(f"DEBUG: {error_msg}")  
+            raise QueryValidationError(error_msg)  
+        
+        hand_type, action_verb, manipulated_object, target_object, tool = parts  
+        #print(f"DEBUG: Parsed - hand_type: {hand_type}, action_verb: {action_verb}")
+
+        # 手の種類の検証  
+        if hand_type not in QueryParser.VALID_HAND_TYPES:  
+            raise QueryValidationError(  
+                f"不正な手の種類です: '{hand_type}'. 許可される値: {QueryParser.VALID_HAND_TYPES}"  
+            )  
+          
+        # 動作の検証（空文字列は許可しない）  
+        if action_verb == "":  
+            raise QueryValidationError(  
+                f"動作が空文字列です: '{query_text}'"  
+            )  
+          
+        # 物体名とツール名の検証（空文字列は許可しない）  
+        for i, (name, part) in enumerate([  
+            ("manipulated_object", manipulated_object),  
+            ("target_object", target_object),   
+            ("tool", tool)  
+        ], 2):  # 2番目の要素から開始  
+            if part == "":  
+                raise QueryValidationError(  
+                    f"要素{i+1}({name})が空文字列です。'None'を使用してください: '{query_text}'"  
+                )  
+          
+        # ActionDataを作成  
+        action_data = ActionData(  
+            action_verb=action_verb,  
+            manipulated_object=manipulated_object if manipulated_object != 'None' else None,  
+            target_object=target_object if target_object != 'None' else None,  
+            tool=tool if tool != 'None' else None  
+        )  
+          
+        return hand_type, action_data
+
+    @staticmethod  
+    def detect_hand_type(query_text: str) -> str:  
+        """クエリから手の種類を推定（新形式対応）"""  
+        # Stepクエリの場合は検証をスキップ  
+        if query_text.startswith("Step:"):  
+            return 'unspecified'
+        try:  
+            hand_type, _ = QueryParser.validate_and_parse_query(query_text)  
+            if hand_type == 'LeftHand':  
+                return 'left_hand'  
+            elif hand_type == 'RightHand':  
+                return 'right_hand'  
+            elif hand_type == 'BothHands':  
+                return 'both_hands'  
+            else:  # None  
+                return 'unspecified'  
+        except QueryValidationError:  
+            # 旧形式のフォールバック  
+            query_lower = query_text.lower()  
+            if 'left' in query_lower or '左' in query_lower:  
+                return 'left_hand'  
+            elif 'right' in query_lower or '右' in query_lower:  
+                return 'right_hand'  
+            return 'right_hand'  # デフォルト
+
+class QueryValidationError(Exception):  
+    """クエリ検証エラー"""  
+      
+    def __init__(self, message: str, query_text: str = None, error_type: str = None):  
+        super().__init__(message)  
+        self.query_text = query_text  
+        self.error_type = error_type  
+        self.message = message  
+      
+    def __str__(self):  
+        if self.query_text:  
+            return f"Query validation error for '{self.query_text}': {self.message}"  
+        return f"Query validation error: {self.message}"  
+      
+    @classmethod  
+    def invalid_format(cls, query_text: str, expected_parts: int, actual_parts: int):  
+        """フォーマットエラー用のファクトリメソッド"""  
+        message = f"クエリ形式が不正です。{expected_parts}つの要素が必要ですが、{actual_parts}個の要素が見つかりました"  
+        return cls(message, query_text, "invalid_format")  
+      
+    @classmethod  
+    def invalid_hand_type(cls, query_text: str, hand_type: str, valid_types: set):  
+        """手の種類エラー用のファクトリメソッド"""  
+        message = f"不正な手の種類です: '{hand_type}'. 許可される値: {valid_types}"  
+        return cls(message, query_text, "invalid_hand_type")  
+      
+    @classmethod  
+    def empty_field(cls, query_text: str, field_name: str, field_index: int):  
+        """空フィールドエラー用のファクトリメソッド"""  
+        message = f"要素{field_index}({field_name})が空文字列です。'None'を使用してください"  
+        return cls(message, query_text, "empty_field")  
+
+###############################
+## Timelineデータ用の構造定義 ##
+###############################
+
+@dataclass  
+class NewIntervalPreview:  
+    start_time: float  
+    end_time: float  
+  
+@dataclass  
+class TimelineData:  
+    """タイムライン描画に必要なデータを格納"""  
+    video_duration: float = 0.0  
+    current_position: float = 0.0  
+    confidence_threshold: float = 0.0  
+    intervals: List[DetectionInterval] = None  
+    saliency_scores: List[float] = None  
+    highlighted_interval: Optional[DetectionInterval] = None  
+    time_scale_enabled: bool = False  
+    clip_duration: float = 2.0  
+      
+    # ドラッグ関連  
+    is_dragging: bool = False  
+    dragging_interval: Optional[DetectionInterval] = None  
+    drag_mode: Optional[str] = None  # 'move', 'resize_start', 'resize_end'  
+      
+    # 新規区間作成関連  
+    is_creating_new_interval: bool = False  
+    new_interval_preview: Optional[NewIntervalPreview] = None  
+      
+    def __post_init__(self):  
+        if self.intervals is None:  
+            self.intervals = []  
+        if self.saliency_scores is None:  
+            self.saliency_scores = []

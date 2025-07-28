@@ -5,9 +5,8 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import pyqtSignal, QTimer, Qt  
 from typing import Optional  
   
-from Results import QueryResults, DetectionInterval  
+from DataClasses import QueryResults, DetectionInterval, QueryParser
 from EditCommandFactory import EditCommandFactory  
-from STTDataStructures import QueryParser  
 from Utilities import show_call_stack  # デバッグ用スタックトレース表示
 
 class ActionEditor(QWidget):  

@@ -1,7 +1,7 @@
 # TimelineEventCoordinator.py  
 from PyQt6.QtCore import QObject, pyqtSignal  
 from typing import Dict, List, Optional, Any  
-from DetectionInterval import DetectionInterval  
+from DataClasses import DetectionInterval  
   
 class TimelineEventCoordinator(QObject):  
     """タイムラインイベントの調整とシグナル発信を担当するクラス"""  

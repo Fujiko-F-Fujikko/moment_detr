@@ -5,13 +5,11 @@ from typing import Optional, Dict, Any
 from VideoPlayerController import VideoPlayerController
 from VideoDataController import VideoDataController  
 from ResultsDataController import ResultsDataController  
-from STTDataController import STTDataController  
 from TimelineDisplayManager import TimelineDisplayManager  
 from EditWidgetManager import EditWidgetManager  
-from Results import DetectionInterval, QueryResults
+from DataClasses import DetectionInterval, QueryResults, QueryParser, QueryValidationError
 from ResultsDisplayManager import ResultsDisplayManager
 from Utilities import show_call_stack  # デバッグ用スタックトレース表示
-from STTDataStructures import QueryParser, QueryValidationError
 from EditCommandFactory import EditCommandFactory
   
 class ApplicationCoordinator(QObject):  
@@ -29,7 +27,6 @@ class ApplicationCoordinator(QObject):
         # データコントローラー  
         self.video_data_controller = VideoDataController()  
         self.results_data_controller = ResultsDataController()  
-        self.stt_data_controller = STTDataController()  
           
         # UI管理コンポーネント  
         self.timeline_display_manager: Optional[TimelineDisplayManager] = None  
@@ -51,7 +48,6 @@ class ApplicationCoordinator(QObject):
         self.video_data_controller.videoLoaded.connect(self.handle_video_loaded)  
         self.results_data_controller.resultsLoaded.connect(self.handle_results_loaded)  
         self.results_data_controller.resultsFiltered.connect(self.handle_results_filtered)  
-        self.stt_data_controller.datasetUpdated.connect(self.handle_dataset_updated)  
       
     def set_ui_components(self, timeline_display_manager: TimelineDisplayManager,  
                          edit_widget_manager: EditWidgetManager,  
@@ -145,7 +141,7 @@ class ApplicationCoordinator(QObject):
         if self.timeline_display_manager:  
             video_name = self.video_data_controller.get_video_name()  
             self.timeline_display_manager.set_query_results(  
-                filtered_results, self.stt_data_controller, video_name  
+                filtered_results, self.results_data_controller
             )  
           
         # 編集ウィジェットの同期  
@@ -164,9 +160,6 @@ class ApplicationCoordinator(QObject):
             if self.video_player_controller:  
                 self.video_player_controller.load_video(video_path)  
               
-            # STTデータに動画を追加  
-            self.stt_data_controller.add_video_data(video_info)  
-              
             # 編集ウィジェットに動画名を設定  
             if self.edit_widget_manager:  
                 self.edit_widget_manager.set_current_video(video_info.video_id)  
@@ -181,11 +174,6 @@ class ApplicationCoordinator(QObject):
         """推論結果を読み込み"""  
         try:  
             results = self.results_data_controller.load_inference_results(json_path)  
-            
-            # STTデータに推論結果を追加  
-            video_name = self.video_data_controller.get_video_name()  
-            if video_name:  
-                self.stt_data_controller.add_inference_results(video_name, results)  
             
             self.current_query_results = results  
             
@@ -210,11 +198,6 @@ class ApplicationCoordinator(QObject):
     
     def handle_results_filtered(self, filtered_results):  
         """結果フィルタリング時の処理"""  
-        if self.timeline_display_manager:  
-            video_name = self.video_data_controller.get_video_name()  
-            self.timeline_display_manager.set_query_results(  
-                filtered_results, self.stt_data_controller, video_name  
-            )
       
     def handle_dataset_updated(self):  
         """データセット更新時の処理"""  
@@ -296,30 +279,43 @@ class ApplicationCoordinator(QObject):
                 
                 self.command_factory.create_and_execute_step_modify(  
                     interval, old_start, old_end, new_start, new_end,  
-                    self.stt_data_controller, self.video_data_controller.get_video_name()  
+                    self.results_data_controller, self.video_data_controller.get_video_name()  
                 )  
             else:  
                 self.command_factory.create_and_execute_interval_modify(  
                     interval, old_start, old_end, new_start, new_end  
                 )
     
-    def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):    
-        """新規区間作成時の処理"""    
-        if timeline_type == "Steps":    
-            # Step用の新規区間作成処理    
-            video_name = self.video_data_controller.get_video_name()    
-            if video_name and self.stt_data_controller and self.command_factory:    
-                # 新しいステップを作成    
-                if video_name in self.stt_data_controller.stt_dataset.database:    
-                    steps_count = len(self.stt_data_controller.stt_dataset.database[video_name].steps)    
-                    step_text = f"New Step {steps_count + 1}"    
-                else:    
-                    step_text = "New Step 1"    
-                
-                # EditCommandFactoryを使用してUndoコマンドを作成    
-                self.command_factory.create_and_execute_step_add(    
-                    self.stt_data_controller, video_name, step_text, [start_time, end_time]    
-                )    
+    def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
+        """新規区間作成時の処理"""  
+        if timeline_type == "Steps":  
+            # Step用の新規区間作成処理  
+            video_name = self.video_data_controller.get_video_name()  
+            if video_name and self.results_data_controller and self.command_factory:  
+                # ResultsDataControllerからステップ数を取得  
+                steps_count = self.results_data_controller.get_steps_count(video_name)  
+                step_text = f"New Step {steps_count + 1}" if steps_count >= 0 else "New Step 1"  
+                  
+                new_query_result = QueryResults(  
+                    query_text=f"Step:{step_text}",  
+                    video_id=video_name or "unknown",  
+                    relevant_windows=[],  
+                    saliency_scores=[],  
+                    query_id=len(self.results_data_controller.get_all_results())  
+                )  
+                  
+                # デフォルトの区間を作成  
+                default_interval = DetectionInterval(  
+                    start_time=start_time,  
+                    end_time=end_time,  
+                    confidence_score=1.0,  
+                    query_id=new_query_result.query_id  
+                )  
+                default_interval.query_result = new_query_result  
+                new_query_result.relevant_windows.append(default_interval)  
+                  
+                # ResultsDataControllerに追加  
+                self.results_data_controller.add_step_query_result(new_query_result)
         else:  
             # Action用の新規区間作成処理（修正版）  
             if self.current_query_results and self.command_factory:  
@@ -411,18 +407,12 @@ class ApplicationCoordinator(QObject):
     def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
         """ステップセグメント更新の処理"""  
         video_name = self.video_data_controller.get_video_name()  
-        if video_name and self.stt_data_controller:  
-            # 該当するステップのインデックスを見つける  
-            if video_name in self.stt_data_controller.stt_dataset.database:  
-                video_data = self.stt_data_controller.stt_dataset.database[video_name]  
-                for i, step in enumerate(video_data.steps):  
-                    if step.step == step_text:  
-                        # 既存のmodify_stepメソッドを使用してセグメントを更新  
-                        self.stt_data_controller.modify_step(  
-                            video_name, i, new_segment=new_segment  
-                        )  
-                        break  
-        
+        if video_name and self.results_data_controller:  
+            # ResultsDataControllerにステップ修正メソッドを追加  
+            self.results_data_controller.modify_step_segment(  
+                video_name, step_text, new_segment  
+            )  
+          
         # コンポーネント同期  
         self.synchronize_step_updates()
 
@@ -439,8 +429,8 @@ class ApplicationCoordinator(QObject):
             video_name = self.video_data_controller.get_video_name()  
             filtered_results = self.results_data_controller.get_filtered_results()  
             self.timeline_display_manager.set_query_results(  
-                filtered_results, self.stt_data_controller, video_name  
-            )  
+                filtered_results, self.results_data_controller
+            )
       
     def synchronize_video_position(self, position: float):  
         """動画位置の同期"""  
@@ -469,10 +459,6 @@ class ApplicationCoordinator(QObject):
     def get_results_data_controller(self) -> ResultsDataController:  
         """ResultsDataControllerを取得"""  
         return self.results_data_controller  
-      
-    def get_stt_data_controller(self) -> STTDataController:  
-        """STTDataControllerを取得"""  
-        return self.stt_data_controller  
       
     def get_current_state(self) -> Dict[str, Any]:  
         """現在の状態を取得（デバッグ用）"""  

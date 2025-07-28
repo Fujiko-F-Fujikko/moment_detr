@@ -6,7 +6,7 @@ from typing import Optional
 from ActionEditor import ActionEditor  
 from StepEditor import StepEditor  
 from EditCommandFactory import EditCommandFactory  
-from Results import QueryResults, DetectionInterval  
+from DataClasses import QueryResults, DetectionInterval  
   
 class EditWidgetManager(QWidget):  
     """編集ウィジェットの統合管理を担当するクラス"""  
@@ -23,6 +23,7 @@ class EditWidgetManager(QWidget):
     def __init__(self, main_window=None):  
         super().__init__()  
         self.main_window = main_window  
+        self.results_data_controller = None
         self.command_factory = EditCommandFactory(main_window) if main_window else None  
           
         # 個別エディター  
@@ -65,9 +66,9 @@ class EditWidgetManager(QWidget):
         self.step_editor.stepDeleted.connect(self.stepDeleted)  
         self.step_editor.dataChanged.connect(self.dataChanged)  
       
-    def set_stt_data_manager(self, manager):  
-        """STTDataManagerを設定"""  
-        self.step_editor.set_stt_data_manager(manager)  
+    def set_results_data_manager(self, results_controller):  
+        """ResultsDataControllerを設定"""  
+        self.results_data_controller = results_controller  
       
     def set_current_video(self, video_name: str):  
         """現在の動画を設定"""  
@@ -160,7 +161,6 @@ class EditWidgetManager(QWidget):
         step_editor = self.get_step_editor()  
         if step_editor:  
             step_editor.refresh_step_list()  
-            step_editor._update_step_edit_ui()
           
         # その他のUI更新処理  
         self.update()  
