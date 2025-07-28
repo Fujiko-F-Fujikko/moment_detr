@@ -319,23 +319,15 @@ class ApplicationCoordinator(QObject):
             if self.current_query_results and self.command_factory:  
                 # 現在選択されているIntervalのQueryResultsを優先的に使用  
                 source_query_result = None  
-                
-                # EditWidgetManagerから現在選択されているIntervalを取得  
-                if self.edit_widget_manager:  
-                    action_editor = self.edit_widget_manager.get_action_editor()  
-                    if (action_editor and action_editor.selected_interval and   
-                        hasattr(action_editor.selected_interval, 'query_result')):  
-                        source_query_result = action_editor.selected_interval.query_result  
-                
-                # 選択されているIntervalがない場合は従来の方法  
+
+                # ドラッグした領域のtimeline_type に基づいてQueryResultを選択  
+                for query_result in self.current_query_results:  
+                    if timeline_type in query_result.query_text:  
+                        source_query_result = query_result  
+                        break  
+
                 if not source_query_result:  
-                    for query_result in self.current_query_results:  
-                        if timeline_type in query_result.query_text or timeline_type == "RightHand":  
-                            source_query_result = query_result  
-                            break  
-                    
-                    if not source_query_result:  
-                        source_query_result = self.current_query_results[0] if self.current_query_results else None  
+                    source_query_result = self.current_query_results[0] if self.current_query_results else None  
 
                 if source_query_result:  
                     # 独立したQueryResultsを作成  
