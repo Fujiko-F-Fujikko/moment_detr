@@ -4,8 +4,9 @@ from typing import List, Dict, Optional
 import json  
 import os  
   
-from DataClasses import QueryResults, InferenceResults, QueryParser, QueryValidationError, STTDataset, VideoData, ActionData, StepEntry
+from DataClasses import QueryResults, InferenceResults, QueryParser, QueryValidationError, STTDataset, VideoData, ActionData, StepEntry, ActionCategory
 from InferenceResultsLoaderSaver import InferenceResultsLoader, InferenceResultsSaver  
+from Utilities import show_call_stack
   
 class ResultsDataController(QObject):  
     """推論結果データの管理を担当するクラス（STTDataController機能統合版）"""  
@@ -240,7 +241,6 @@ class ResultsDataController(QObject):
           
         # アクションカテゴリの設定  
         for i, category in enumerate(sorted(action_categories)):  
-            from STTDataStructures import ActionCategory  
             stt_dataset.action_categories.append(  
                 ActionCategory(id=i, name=category)  
             )  
