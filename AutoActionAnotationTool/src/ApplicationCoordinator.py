@@ -307,6 +307,13 @@ class ApplicationCoordinator(QObject):
                   
                 # ResultsDataControllerに追加  
                 self.results_data_controller.add_step_query_result(new_query_result)
+
+                # StepEditorのシグナルを発信  
+                if self.edit_widget_manager:  
+                    step_editor = self.edit_widget_manager.get_step_editor()  
+                    if step_editor:  
+                        step_editor.stepAdded.emit()  
+                        step_editor.dataChanged.emit()
         else:  
             # Action用の新規区間作成処理（修正版）  
             if self.current_query_results and self.command_factory:  
