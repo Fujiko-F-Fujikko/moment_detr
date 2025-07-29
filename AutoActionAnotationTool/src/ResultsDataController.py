@@ -97,24 +97,39 @@ class ResultsDataController(QObject):
       
     def _filter_by_hand_type(self, results: List[QueryResults], hand_type: str) -> List[QueryResults]:  
         """Hand Type別にフィルタリング"""  
-        filtered = []  
+        if hand_type == "All":  
+            return results.copy()  
+          
+        filtered_results = []  
         for result in results:  
+            # フィルタ条件に一致しない場合でも、空のQueryResultsを保持  
+            should_include = False  
+              
             # Stepクエリの場合は特別処理  
             if result.query_text.startswith("Step:"):  
-                # Stepクエリは除外
-                continue  
+                should_include = (hand_type == "Other")  
+            else:  
+                try:  
+                    detected_hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
+                    should_include = (detected_hand_type == hand_type) or (hand_type == "Other" and detected_hand_type == "None")  
+                except QueryValidationError:  
+                    should_include = (hand_type == "Other")  
               
-            try:  
-                detected_hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
-                if detected_hand_type == hand_type or hand_type == "All":  
-                    filtered.append(result)  
-                elif hand_type == "Other" and detected_hand_type == "None":  
-                    filtered.append(result)  
-            except QueryValidationError:  
-                if hand_type == "Other":  
-                    filtered.append(result)  
+            # 条件に一致する場合は元のQueryResultsを、一致しない場合は空の区間を持つQueryResultsを作成  
+            if should_include:  
+                filtered_results.append(result)  
+            else:  
+                # 空のQueryResultsを作成して保持  
+                empty_result = QueryResults(  
+                    query_text=result.query_text,  
+                    video_id=result.video_id,  
+                    relevant_windows=[],  # 空のリスト  
+                    saliency_scores=result.saliency_scores,  
+                    query_id=result.query_id  
+                )  
+                filtered_results.append(empty_result)  
           
-        return filtered  
+        return filtered_results
       
     def _filter_by_confidence(self, results: List[QueryResults], threshold: float) -> List[QueryResults]:    
         """信頼度でフィルタリング"""    
