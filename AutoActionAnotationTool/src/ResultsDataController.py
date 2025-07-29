@@ -207,7 +207,7 @@ class ResultsDataController(QObject):
         """現在のアノテーションデータをSTTデータ形式に変換"""  
         stt_dataset = STTDataset()  
           
-        if not self.current_video_path:  
+        if self.current_video_path is None:  
             return stt_dataset.__dict__  
           
         # 動画データの作成  

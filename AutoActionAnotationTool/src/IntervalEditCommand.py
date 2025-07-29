@@ -12,11 +12,8 @@ class IntervalEditCommand(QUndoCommand):
         self.main_window = main_window  
           
     def redo(self):  
-        print(f"[DEBUG] IntervalEditCommand.redo: interval={self.interval}")  
-        print(f"[DEBUG] Before: start={self.interval.start_time}, end={self.interval.end_time}")  
         self.interval.start_time = self.new_start  
         self.interval.end_time = self.new_end  
-        print(f"[DEBUG] After: start={self.interval.start_time}, end={self.interval.end_time}")  
 
         # QueryResults内の対応するintervalも更新  
         if hasattr(self.interval, 'query_result') and self.interval.query_result:  
@@ -29,11 +26,8 @@ class IntervalEditCommand(QUndoCommand):
         self._update_ui()
       
     def undo(self):  
-        print(f"[DEBUG] IntervalEditCommand.undo: interval={self.interval}")  
-        print(f"[DEBUG] Before: start={self.interval.start_time}, end={self.interval.end_time}")  
         self.interval.start_time = self.old_start  
         self.interval.end_time = self.old_end  
-        print(f"[DEBUG] After: start={self.interval.start_time}, end={self.interval.end_time}")  
           
         # QueryResults内の対応するintervalも更新  
         if hasattr(self.interval, 'query_result') and self.interval.query_result:  
@@ -53,6 +47,11 @@ class IntervalEditCommand(QUndoCommand):
         if hasattr(self.main_window, 'edit_widget_manager'):  
             # 全体のUIを更新  
             self.main_window.edit_widget_manager.refresh_ui()  
+
+            # 新しく追加されたIntervalを選択状態にする  
+            if self.interval in self.interval.query_result.relevant_windows:  
+                index = self.interval.query_result.relevant_windows.index(self.interval)  
+                self.main_window.edit_widget_manager.set_selected_interval(self.interval, index)
   
 class IntervalDeleteCommand(QUndoCommand):  
     def __init__(self, query_result, interval, index, main_window, description="Delete Interval"):  

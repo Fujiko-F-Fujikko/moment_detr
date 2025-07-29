@@ -209,7 +209,7 @@ class TimelineInteractionHandler(QObject):
       
     def _handle_drag_move(self, current_time: float, timeline_data: 'TimelineData', widget_width: int):  
         """ドラッグ移動を処理"""  
-        if not self.dragging_interval:  
+        if self.dragging_interval is None:  
             return  
           
         new_start = self.dragging_interval.start_time  

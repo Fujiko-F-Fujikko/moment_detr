@@ -90,10 +90,19 @@ class EditCommandFactory:
         """ステップ用QueryResult削除コマンドを作成・実行"""  
         results_controller.remove_step_query_result(query_result)  
       
-    def create_and_execute_step_text_modify(self, query_result, old_text, new_text):  
-        """ステップテキスト修正コマンドを作成・実行"""  
-        command = ActionDetailModifyCommand(  
-            query_result, old_text, new_text, self.main_window  
+    def create_step_text_modify_command(self, query_result: QueryResults,  
+                                          old_query_text: str, new_query_text: str,  
+                                          description: str = "Modify Action Details") -> ActionDetailModifyCommand:  
+        """ステップテキスト変更コマンドを作成"""  
+        return ActionDetailModifyCommand(
+          query_result, old_query_text, new_query_text,
+          self.main_window, description
+        )  
+
+    def create_and_execute_step_text_modify(self, query_result, old_query_text, new_query_text):  
+        """ステップテキスト変更コマンドを作成・実行"""  
+        command = self.create_step_text_modify_command(
+          query_result, old_query_text, new_query_text
         )  
         if self.main_window and hasattr(self.main_window, 'undo_stack'):  
             self.main_window.undo_stack.push(command)

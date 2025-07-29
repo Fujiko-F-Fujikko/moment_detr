@@ -145,7 +145,7 @@ class ActionEditor(QWidget):
   
     def get_current_query_result(self) -> Optional[QueryResults]:    
         """現在のQueryResultを取得（ResultsDataControllerから）"""    
-        if not self.results_data_controller:    
+        if self.results_data_controller is None:    
             return None    
         filtered_results = self.results_data_controller.get_filtered_results()    
         # 現在選択されているintervalに基づいて適切なQueryResultを返す    
@@ -227,7 +227,7 @@ class ActionEditor(QWidget):
             
         try:    
             current_query_result = self.get_current_query_result()  # 修正箇所  
-            if not current_query_result:  
+            if current_query_result is None:  
                 return  
                   
             hand_type, action_data = QueryParser.validate_and_parse_query(current_query_result.query_text)    
@@ -369,8 +369,8 @@ class ActionEditor(QWidget):
     def delete_interval(self):  
         """区間を削除"""  
         current_query_result = self.get_current_query_result()  
-        if (self._is_initializing or not self.selected_interval or   
-            not current_query_result or not self.command_factory):  
+        if (self._is_initializing or self.selected_interval is None or   
+            current_query_result is None or self.command_factory is None):  
             print("DEBUG: Early return due to missing conditions")  
             return  
           
@@ -406,12 +406,12 @@ class ActionEditor(QWidget):
     
     def add_new_interval(self, query_result: Optional[QueryResults] = None, start_time: Optional[float] = None, end_time: Optional[float] = None):    
         """修正版：ResultsDataControllerを使用"""    
-        if self._is_initializing or not self.command_factory or not self.results_data_controller:    
+        if self._is_initializing or self.command_factory is None or self.results_data_controller is None:    
             return    
                 
         if query_result is None:    
             current_query_result = self.get_current_query_result()    
-            if not current_query_result:    
+            if current_query_result is None:    
                 return    
                 
             import copy    

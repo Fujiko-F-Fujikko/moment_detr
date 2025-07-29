@@ -34,7 +34,7 @@ class ResultsDisplayManager(QObject):
       
     def update_display(self, results=None):  
         """表示を更新（古い実装仕様に合わせて修正）"""  
-        if not self.results_list:  
+        if self.results_list is None:  
             return  
         
         # リストをクリア  
@@ -51,7 +51,7 @@ class ResultsDisplayManager(QObject):
         
         # 各手の種類ごとに表示  
         for hand_type, results in grouped_results.items():  
-            if not results:  
+            if results is None:  
                 continue  
             
             # ヘッダーアイテムを追加  
@@ -89,7 +89,7 @@ class ResultsDisplayManager(QObject):
       
     def select_result_by_query_text(self, query_text: str):  
         """クエリテキストで結果を選択"""  
-        if not self.results_list:  
+        if self.results_list is None:  
             return  
           
         for i in range(self.results_list.count()):  

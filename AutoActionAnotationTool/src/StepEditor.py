@@ -148,7 +148,7 @@ class StepEditor(QWidget):
       
     def _load_step_data(self):  
         print(f"[DEBUG] _load_step_data called")  
-        if not self.results_data_controller:  
+        if self.results_data_controller is None:  
             print(f"[DEBUG] ERROR: results_data_controller is None in _load_step_data!")  
             return  
           
@@ -234,16 +234,16 @@ class StepEditor(QWidget):
     def add_step(self, query_result: Optional[QueryResults] = None, start_time: Optional[float] = None, end_time: Optional[float] = None):  
         """新しいステップを追加"""  
         print(f"[DEBUG] StepEditor.add_step called: query_result={query_result}, start={start_time}, end={end_time}")
-        if not self.results_data_controller:  
+        if self.results_data_controller is None:  
             print(f"[DEBUG] ERROR: results_data_controller is None!")  
             return  
           
         if query_result is None:  
             # ボタンクリック時のデフォルト処理  
-            if not self.step_text_edit:  
+            if self.step_text_edit is None:  
                 return  
             step_text = self.step_text_edit.text().strip()  
-            if not step_text:  
+            if step_text is None:  
                 return  
                   
             # 新しいQueryResultを作成  
@@ -368,7 +368,7 @@ class StepEditor(QWidget):
     def delete_step(self):  
         """選択されたステップを削除"""  
         current_item = self.step_list.currentItem()  
-        if not current_item or not self.results_data_controller:  
+        if current_item is None or self.results_data_controller is None:  
             return  
           
         index = current_item.data(1)  
@@ -389,12 +389,12 @@ class StepEditor(QWidget):
       
     def select_step(self, step_text: str = None, step_index: int = None):  
         """指定されたステップを選択"""  
-        if not self.step_list:  
+        if self.step_list is None:  
             return  
           
         for i in range(self.step_list.count()):  
             item = self.step_list.item(i)  
-            if not item:  
+            if item is None:  
                 continue  
                   
             item_index = item.data(1)  
@@ -424,7 +424,7 @@ class StepEditor(QWidget):
       
     def get_step_query_results(self) -> List[QueryResults]:  
         """ステップ用QueryResultsを取得（ResultsDataControllerから）"""  
-        if not self.results_data_controller:  
+        if self.results_data_controller is None:  
             return []  
         return self.results_data_controller.get_step_query_results()  
 

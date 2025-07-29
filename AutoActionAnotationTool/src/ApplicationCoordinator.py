@@ -238,43 +238,31 @@ class ApplicationCoordinator(QObject):
 
     def handle_interval_drag_started(self, interval: DetectionInterval):  
         """区間ドラッグ開始時の処理"""  
-        print(f"[DEBUG] Drag started for interval: start={interval.start_time}, end={interval.end_time}")  
           
         # ApplicationCoordinator自体に保存  
         self.drag_original_start = interval.start_time  
         self.drag_original_end = interval.end_time  
         self.dragging_interval = interval  
-        print(f"[DEBUG] Saved original values: start={self.drag_original_start}, end={self.drag_original_end}")
       
     def handle_interval_drag_moved(self, interval: DetectionInterval, new_start: float, new_end: float):  
-        print(f"[DEBUG] Drag moved: interval={interval}, new_start={new_start}, new_end={new_end}")  
-        print(f"[DEBUG] Interval query_type: {getattr(interval, 'query_type', 'unknown')}")  
           
         if self.edit_widget_manager and hasattr(interval, 'query_result'):  
-            print(f"[DEBUG] Setting current query results: {interval.query_result.query_text}")  
             self.edit_widget_manager.set_current_query_results(interval.query_result)  
               
             if interval.query_type == "step":  
-                print(f"[DEBUG] Step interval detected, updating realtime")  
                 step_editor = self.edit_widget_manager.get_step_editor()  
                 if step_editor:  
                     step_editor.update_interval_realtime(new_start, new_end)  
-                    print(f"[DEBUG] Step editor realtime update called")
       
 
     def handle_interval_drag_finished(self, interval: DetectionInterval, new_start: float, new_end: float):  
         """区間ドラッグ完了時の処理"""  
-        print(f"[DEBUG] Drag finished: interval={interval}, new_start={new_start}, new_end={new_end}")  
-        print(f"[DEBUG] Interval query_type: {getattr(interval, 'query_type', 'unknown')}")  
         if self.command_factory:  
             old_start = self.drag_original_start if self.drag_original_start is not None else interval.start_time  
             old_end = self.drag_original_end if self.drag_original_end is not None else interval.end_time  
-            print(f"[DEBUG] Creating command: old_start={old_start}, old_end={old_end}, new_start={new_start}, new_end={new_end}")  
-              
             self.command_factory.create_and_execute_interval_modify(  
                 interval, old_start, old_end, new_start, new_end  
             )  
-            print(f"[DEBUG] Command executed")
               
             # ドラッグ状態をクリア  
             self.drag_original_start = None  
@@ -283,9 +271,7 @@ class ApplicationCoordinator(QObject):
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
         """修正版：ResultsDataControllerを使用"""  
-        print(f"[DEBUG] handle_new_interval_created called: start={start_time}, end={end_time}, type={timeline_type}") 
         if timeline_type == "Steps":  
-            print(f"[DEBUG] Processing Steps timeline")
             # Step用の処理  
             step_editor = self.edit_widget_manager.get_step_editor()  
             if step_editor:  
@@ -316,7 +302,7 @@ class ApplicationCoordinator(QObject):
                             source_query_result = query_result  
                             break  
                       
-                    if not source_query_result:  
+                    if source_query_result is None:  
                         source_query_result = current_results[0]  
                       
                     if source_query_result:  
@@ -381,10 +367,8 @@ class ApplicationCoordinator(QObject):
             self.timeline_display_manager.update_all_timelines()  
       
     def synchronize_step_updates(self):  
-        print(f"[DEBUG] synchronize_step_updates called")  
         if self.timeline_display_manager:  
             filtered_results = self.results_data_controller.get_filtered_results()  
-            print(f"[DEBUG] Synchronizing with {len(filtered_results)} filtered results")  
             self.timeline_display_manager.set_query_results(filtered_results, self.results_data_controller)
       
     def synchronize_video_position(self, position: float):  
