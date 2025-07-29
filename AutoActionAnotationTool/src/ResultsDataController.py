@@ -164,7 +164,10 @@ class ResultsDataController(QObject):
       
     def add_step_query_result(self, query_result: QueryResults):  
         """新しいステップ用QueryResultsを追加"""  
+        print(f"[DEBUG] Adding step query_result: {query_result.query_text}")  
+        print(f"[DEBUG] Before add - total results: {len(self.all_results)}")  
         self.all_results.append(query_result)  
+        print(f"[DEBUG] After add - total results: {len(self.all_results)}")  
         self._apply_current_filters()  
         self.resultsUpdated.emit(self.all_results)  
       

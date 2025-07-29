@@ -184,16 +184,16 @@ class LayoutOrchestrator(QObject):
       
     def update_layout_constraints(self, **kwargs):  
         """レイアウト制約を動的に更新"""  
-        if 'left_min_width' in kwargs and self.left_panel:  
+        if 'left_min_width' in kwargs and self.left_panel is not None:  
             self.left_panel.setMinimumWidth(kwargs['left_min_width'])  
           
-        if 'right_min_width' in kwargs and self.right_panel:  
+        if 'right_min_width' in kwargs and self.right_panel is not None:  
             self.right_panel.setMinimumWidth(kwargs['right_min_width'])  
           
-        if 'video_min_height' in kwargs and self.video_container:  
+        if 'video_min_height' in kwargs and self.video_container is not None:  
             self.video_container.setMinimumHeight(kwargs['video_min_height'])  
           
-        if 'timeline_min_height' in kwargs and self.timeline_container:  
+        if 'timeline_min_height' in kwargs and self.timeline_container is not None:  
             self.timeline_container.setMinimumHeight(kwargs['timeline_min_height'])  
       
     def set_splitter_sizes(self, horizontal_sizes: list = None, vertical_sizes: list = None):  

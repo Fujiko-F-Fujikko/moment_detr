@@ -72,7 +72,7 @@ class ResultsDisplayManager(QObject):
     def _on_item_clicked(self, item: QListWidgetItem):  
         """アイテムクリック時の処理"""  
         data = item.data(Qt.ItemDataRole.UserRole)  
-        if data and isinstance(data, dict):  
+        if data is not None and isinstance(data, dict):  
             query_result = data.get('query_result')  
             interval = data.get('interval')  
             index = data.get('index', 0)  
@@ -135,7 +135,8 @@ class ResultsDisplayManager(QObject):
 
     def select_interval_in_list(self, target_interval):  
         """Detection Resultsリストで指定された区間を選択"""  
-        if not self.results_list:  
+        if self.results_list is None:  
+            print("select_interval_in_list: ResultsDisplayManager.results_list is not set.")
             return  
         
         # 既存の選択をクリア  

@@ -454,7 +454,8 @@ class ActionEditor(QWidget):
             QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")    
             return    
             
-        # 新しい区間を作成    
+        # 新しい区間を作成
+        print(f"new_interval: {query_result}, type: {type(query_result)}")
         new_interval = DetectionInterval(calculated_start, calculated_end, 1.0, 0, query_type="action")    
         new_interval.query_result = query_result    
             

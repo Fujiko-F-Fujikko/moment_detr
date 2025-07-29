@@ -270,7 +270,9 @@ class ApplicationCoordinator(QObject):
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
         """修正版：ResultsDataControllerを使用"""  
+        print(f"[DEBUG] handle_new_interval_created called: start={start_time}, end={end_time}, type={timeline_type}") 
         if timeline_type == "Steps":  
+            print(f"[DEBUG] Processing Steps timeline")
             # Step用の処理  
             step_editor = self.edit_widget_manager.get_step_editor()  
             if step_editor:  
@@ -367,13 +369,11 @@ class ApplicationCoordinator(QObject):
             self.timeline_display_manager.update_all_timelines()  
       
     def synchronize_step_updates(self):  
-        """ステップ更新の同期"""  
-        # STTデータの変更をタイムラインに反映  
+        print(f"[DEBUG] synchronize_step_updates called")  
         if self.timeline_display_manager:  
             filtered_results = self.results_data_controller.get_filtered_results()  
-            self.timeline_display_manager.set_query_results(  
-                filtered_results, self.results_data_controller
-            )
+            print(f"[DEBUG] Synchronizing with {len(filtered_results)} filtered results")  
+            self.timeline_display_manager.set_query_results(filtered_results, self.results_data_controller)
       
     def synchronize_video_position(self, position: float):  
         """動画位置の同期"""  
