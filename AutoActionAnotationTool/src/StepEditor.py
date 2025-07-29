@@ -261,7 +261,8 @@ class StepEditor(QWidget):
             start_time=calculated_start,  
             end_time=calculated_end,  
             confidence_score=1.0,  
-            query_id=query_result.query_id
+            query_id=query_result.query_id,
+            query_type="step"
         )  
         default_interval.query_result = query_result  
         query_result.relevant_windows.append(default_interval)  

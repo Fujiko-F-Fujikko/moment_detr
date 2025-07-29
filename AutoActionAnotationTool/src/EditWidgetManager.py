@@ -96,30 +96,23 @@ class EditWidgetManager(QWidget):
         self.action_editor.set_selected_interval(interval, index)  
         
         # StepEditorにも情報を渡す（Step区間の場合）  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            if interval.query_result.query_text.startswith("Step:"):  
-                # Step区間の場合、StepEditorで該当ステップを選択  
-                if hasattr(interval, 'label') and interval.label:  
-                    self.step_editor.select_step(step_text=interval.label)
+        if interval.query_type == "step":
+            # Step区間の場合、StepEditorで該当ステップを選択  
+            if hasattr(interval, 'label') and interval.label:  
+                self.step_editor.select_step(step_text=interval.label)
                     
         # 区間の種類に応じて適切なタブに切り替え  
         self.switch_to_appropriate_tab(interval)
       
     def switch_to_appropriate_tab(self, interval: DetectionInterval):  
         """区間の種類に応じて適切なタブに切り替える"""  
-        if hasattr(interval, 'query_result') and interval.query_result:  
-            query_text = interval.query_result.query_text  
-              
-            # Stepの区間かどうかを判定  
-            if query_text.startswith("Step:"):  
-                # Step Editタブに切り替え  
-                self.tab_widget.setCurrentIndex(1)  
-                # クリックされたステップを選択状態にする  
+        if hasattr(interval, 'query_type'):  
+            if interval.query_type == "step":  
+                self.tab_widget.setCurrentIndex(1)  # Step Edit tab  
                 if hasattr(interval, 'label'):  
                     self.step_editor.select_step(step_text=interval.label)  
             else:  
-                # Action Editタブに切り替え  
-                self.tab_widget.setCurrentIndex(0)  
+                self.tab_widget.setCurrentIndex(0)  # Action Edit tabex(0)  
       
     def clear_selection(self):  
         """選択をクリア"""  

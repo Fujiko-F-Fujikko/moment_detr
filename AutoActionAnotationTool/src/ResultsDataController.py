@@ -83,12 +83,9 @@ class ResultsDataController(QObject):
     def _apply_current_filters(self):  
         """現在のフィルタ設定を適用"""  
         # Hand Typeフィルタを適用  
-        if self.current_hand_type_filter == "All":  
-            filtered_by_hand_type = self.all_results.copy()  
-        else:  
-            filtered_by_hand_type = self._filter_by_hand_type(  
-                self.all_results, self.current_hand_type_filter  
-            )  
+        filtered_by_hand_type = self._filter_by_hand_type(  
+            self.all_results, self.current_hand_type_filter  
+        )  
           
         # 信頼度フィルタを適用  
         self.filtered_results = self._filter_by_confidence(  
@@ -100,20 +97,16 @@ class ResultsDataController(QObject):
       
     def _filter_by_hand_type(self, results: List[QueryResults], hand_type: str) -> List[QueryResults]:  
         """Hand Type別にフィルタリング"""  
-        if hand_type == "All":  
-            return results  
-          
         filtered = []  
         for result in results:  
             # Stepクエリの場合は特別処理  
             if result.query_text.startswith("Step:"):  
-                if hand_type == "Other":  
-                    filtered.append(result)  
+                # Stepクエリは除外
                 continue  
               
             try:  
                 detected_hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
-                if detected_hand_type == hand_type:  
+                if detected_hand_type == hand_type or hand_type == "All":  
                     filtered.append(result)  
                 elif hand_type == "Other" and detected_hand_type == "None":  
                     filtered.append(result)  

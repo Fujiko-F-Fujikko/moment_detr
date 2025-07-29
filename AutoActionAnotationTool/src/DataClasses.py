@@ -13,8 +13,9 @@ class DetectionInterval:
     confidence_score: float  
     query_id: Optional[int] = None  
     label: Optional[str] = None
-    query_result: Optional[object] = None
+    query_result: Optional['QueryResults'] = None
     interval_id: Optional[str] = None
+    query_type: Optional[str] = None  # 新規追加：クエリの種類（step or action）
       
     def __eq__(self, other):  
         if not isinstance(other, DetectionInterval):  

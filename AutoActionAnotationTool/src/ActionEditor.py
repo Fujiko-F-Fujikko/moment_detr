@@ -455,7 +455,7 @@ class ActionEditor(QWidget):
             return    
             
         # 新しい区間を作成    
-        new_interval = DetectionInterval(calculated_start, calculated_end, 1.0, 0)    
+        new_interval = DetectionInterval(calculated_start, calculated_end, 1.0, 0, query_type="action")    
         new_interval.query_result = query_result    
             
         # ResultsDataControllerに追加    

@@ -299,6 +299,9 @@ class TimelineDisplayManager(QWidget):
         }    
             
         for query_result in query_results_list:    
+            # Stepクエリは除外（Stepsタイムラインで別途処理）  
+            if query_result.query_text.startswith("Step:"):  
+                continue  
             try:    
                 hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)    
                 if hand_type in hand_type_groups:    
@@ -327,7 +330,8 @@ class TimelineDisplayManager(QWidget):
                         start_time=interval.start_time,  
                         end_time=interval.end_time,  
                         confidence_score=1.0,  # ステップは常に信頼度1.0  
-                        label=step_text  
+                        label=step_text,
+                        query_type="step"
                     )  
                       
                     # 元のQueryResultsを参照として設定  

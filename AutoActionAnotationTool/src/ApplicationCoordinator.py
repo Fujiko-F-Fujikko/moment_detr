@@ -249,8 +249,7 @@ class ApplicationCoordinator(QObject):
                 self.edit_widget_manager.set_selected_interval(interval, index)  
 
                 # Step区間の場合は追加でリアルタイム更新  
-                if (hasattr(interval.query_result, 'query_text') and   
-                    interval.query_result.query_text.startswith("Step:")):  
+                if interval.query_type == "step":
                     step_editor = self.edit_widget_manager.get_step_editor()  
                     if step_editor:  
                         step_editor.update_interval_realtime(new_start, new_end)  
