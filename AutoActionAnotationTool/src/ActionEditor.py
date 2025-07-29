@@ -176,7 +176,6 @@ class ActionEditor(QWidget):
         self.selected_interval_index = index    
         # デバッグ情報を追加    
   
-        #show_call_stack()  
         self.update_interval_ui()    
         
     def clear_selection(self):    
@@ -308,8 +307,8 @@ class ActionEditor(QWidget):
     def apply_action_changes(self):    
         """区間変更を適用"""    
         current_query_result = self.get_current_query_result()  # 修正箇所  
-        if (self._is_initializing or not self.selected_interval or     
-            not current_query_result or not self.command_factory):    
+        if (self._is_initializing or self.selected_interval is None or     
+            current_query_result is None or self.command_factory is None):    
             return    
             
         # Stepクエリの場合は何もしない    
@@ -349,9 +348,6 @@ class ActionEditor(QWidget):
         # シグナル発信    
         self.intervalUpdated.emit()    
         self.dataChanged.emit()    
-  
-        # Timeline同期を実行  
-        self.main_window.application_coordinator.synchronize_timeline_updates()  
   
     def _build_new_query_text(self) -> str:    
         """入力フィールドから新しいクエリテキストを構築"""    

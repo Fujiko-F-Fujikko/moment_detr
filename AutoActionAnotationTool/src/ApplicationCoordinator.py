@@ -377,7 +377,6 @@ class ApplicationCoordinator(QObject):
 
     def synchronize_timeline_updates(self):  
         """タイムライン更新の同期"""  
-        #show_call_stack()
         if self.timeline_display_manager:  
             self.timeline_display_manager.update_all_timelines()  
       

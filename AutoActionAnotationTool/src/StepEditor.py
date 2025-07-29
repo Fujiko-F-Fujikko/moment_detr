@@ -309,7 +309,7 @@ class StepEditor(QWidget):
     def apply_step_changes(self):  
         """ステップ変更を適用"""  
         current_item = self.step_list.currentItem()  
-        if not current_item or not self.results_data_controller or not self.command_factory:  
+        if current_item is None or self.results_data_controller is None or self.command_factory is None:  
             return  
           
         index = current_item.data(1)  
@@ -320,8 +320,28 @@ class StepEditor(QWidget):
         old_text = query_result.query_text.replace("Step:", "").strip()  
         new_text = self.step_edit_text.text()  
           
+        # 時間変更の確認  
+        time_changed = False  
+        old_start = 0.0  
+        old_end = 0.0  
+        new_start = self.step_start_spin.value()  
+        new_end = self.step_end_spin.value()  
+          
+        if query_result.relevant_windows:  
+            interval = query_result.relevant_windows[0]  
+            old_start = interval.start_time  
+            old_end = interval.end_time  
+            time_changed = (abs(old_start - new_start) > 0.01 or abs(old_end - new_end) > 0.01)  
+          
+        # テキスト変更の確認  
+        text_changed = (old_text != new_text)  
+          
+        # 実際に変更があるかチェック  
+        if not time_changed and not text_changed:  
+            return  
+          
         # テキスト変更の処理  
-        if old_text != new_text:  
+        if text_changed:  
             old_query_text = query_result.query_text  
             new_query_text = f"Step:{new_text}"  
               
@@ -331,25 +351,19 @@ class StepEditor(QWidget):
                 )  
           
         # セグメント変更の処理  
-        if query_result.relevant_windows:  
+        if time_changed and query_result.relevant_windows:  
             interval = query_result.relevant_windows[0]  
-            new_start = self.step_start_spin.value()  
-            new_end = self.step_end_spin.value()  
               
-            print(f"[DEBUG] StepEditor segment change: old_start={interval.start_time}, old_end={interval.end_time}")  
-            print(f"[DEBUG] StepEditor segment change: new_start={new_start}, new_end={new_end}")  
-              
-            if (abs(interval.start_time - new_start) > 0.01 or abs(interval.end_time - new_end) > 0.01):  
-                if self.command_factory:  
-                    print(f"[DEBUG] Creating interval modify command from StepEditor")  
-                    self.command_factory.create_and_execute_interval_modify(  
-                        interval, interval.start_time, interval.end_time, new_start, new_end  
-                    )
+            if self.command_factory:  
+                self.command_factory.create_and_execute_interval_modify(  
+                    interval, old_start, old_end, new_start, new_end  
+                )  
           
+        # 変更があった場合のみUI更新とシグナル発信  
         self._load_step_data()  
         self.refresh_step_list()  
         self.stepModified.emit()  
-        self.dataChanged.emit()  
+        self.dataChanged.emit()
       
     def delete_step(self):  
         """選択されたステップを削除"""  
