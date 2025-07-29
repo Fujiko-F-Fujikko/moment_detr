@@ -122,8 +122,9 @@ class StepEditor(QWidget):
     def _connect_signals(self):  
         """シグナル接続の設定"""  
         if self.add_step_btn:  
-            self.add_step_btn.clicked.connect(self.add_step)  
-          
+            # 修正：ラムダ関数を使用して引数なしで呼び出し  
+            self.add_step_btn.clicked.connect(lambda: self.add_step())
+
         if self.step_list:  
             self.step_list.itemClicked.connect(self.on_step_selected)  
           
@@ -222,24 +223,25 @@ class StepEditor(QWidget):
                 widget.blockSignals(block)  
       
     def add_step(self, query_result: Optional[QueryResults] = None, start_time: Optional[float] = None, end_time: Optional[float] = None):  
-        """修正版：ResultsDataControllerを使用"""  
+        """新しいステップを追加"""  
         if not self.results_data_controller:  
             return  
           
         if query_result is None:  
+            # ボタンクリック時のデフォルト処理  
             if not self.step_text_edit:  
                 return  
             step_text = self.step_text_edit.text().strip()  
             if not step_text:  
                 return  
                   
-            step_query_results = self.get_step_query_results()  
+            # 新しいQueryResultを作成  
             query_result = QueryResults(  
                 query_text=f"Step:{step_text}",  
                 video_id=self.current_video_name or "unknown",  
                 relevant_windows=[],  
                 saliency_scores=[],  
-                query_id=len(step_query_results)  
+                query_id=len(self.step_query_results)  
             )  
               
             self.step_text_edit.clear()  
@@ -252,17 +254,18 @@ class StepEditor(QWidget):
             calculated_start = 0.0  
             calculated_end = 1.0  
           
-        # 区間作成  
+        # デフォルトの区間を作成  
+        print(f"query_result: {query_result}, type: {type(query_result)}")
         default_interval = DetectionInterval(  
             start_time=calculated_start,  
             end_time=calculated_end,  
             confidence_score=1.0,  
-            query_id=query_result.query_id  
+            query_id=query_result.query_id
         )  
         default_interval.query_result = query_result  
-        query_result.relevant_windows = [default_interval]  
+        query_result.relevant_windows.append(default_interval)  
           
-        # ResultsDataControllerに追加（既存のadd_step_query_resultを使用）  
+        # ResultsDataControllerに追加  
         if self.command_factory:  
             self.command_factory.create_and_execute_step_add_query_result(  
                 self.results_data_controller, query_result  

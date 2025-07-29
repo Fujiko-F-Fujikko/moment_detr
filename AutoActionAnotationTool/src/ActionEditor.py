@@ -131,7 +131,8 @@ class ActionEditor(QWidget):
             self.tool_edit.textChanged.connect(self.on_action_value_changed)    
                 
             # ボタンクリック    
-            self.add_button.clicked.connect(self.add_new_interval)    
+            # 修正：ラムダ関数を使用して引数なしで呼び出し  
+            self.add_button.clicked.connect(lambda: self.add_new_interval)    
             self.delete_button.clicked.connect(self.delete_interval)    
                 
             self._signals_connected = True    
