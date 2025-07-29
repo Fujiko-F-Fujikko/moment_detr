@@ -46,19 +46,27 @@ class MainApplicationWindow(QMainWindow):
         self.setup_connections()    
         self.setup_menus()    
         
-    def coordinate_components(self):    
-        """各コーディネーターへの委譲"""    
-        # ApplicationCoordinatorにUI管理コンポーネントを設定    
-        self.application_coordinator.set_ui_components(    
-            self.timeline_display_manager,    
-            self.edit_widget_manager,    
+    def coordinate_components(self):  
+        """修正版：ResultsDataControllerの参照を設定"""  
+        self.application_coordinator.set_ui_components(  
+            self.timeline_display_manager,  
+            self.edit_widget_manager,  
             self.video_controller,  
             self.results_display_manager  
-        )    
-            
-        # EditWidgetManagerにResultsDataControllerを設定（STTDataController削除）  
-        results_controller = self.application_coordinator.get_results_data_controller()    
-        self.edit_widget_manager.set_results_data_manager(results_controller) 
+        )  
+          
+        # ResultsDataControllerの参照を各コンポーネントに設定  
+        results_controller = self.application_coordinator.get_results_data_controller()  
+        self.edit_widget_manager.set_results_data_manager(results_controller)  
+          
+        # ActionEditorにもResultsDataControllerを設定  
+        action_editor = self.edit_widget_manager.get_action_editor()  
+        if action_editor:  
+            action_editor.set_results_data_controller(results_controller)
+        # StepEditorにもResultsDataControllerを設定  
+        step_editor = self.edit_widget_manager.get_step_editor()
+        if step_editor:
+            step_editor.set_results_data_controller(results_controller)
 
     def setup_ui(self):  
         """UIレイアウトの初期化"""  
@@ -231,24 +239,26 @@ class MainApplicationWindow(QMainWindow):
             # 実際にクリックされた区間を使用（引数で渡された場合）  
             selected_interval = interval if interval else query_result.relevant_windows[0]  
             selected_index = index if interval else 0  
-            
+              
             # 重要：現在のAction Editorの状態を保存  
             current_editor = self.application_coordinator.edit_widget_manager.get_action_editor()  
-            if current_editor and current_editor.current_query_result == query_result:  
-                # 同じQueryResultの場合、現在の編集状態を保持  
-                # query_resultを上書きしない  
-                pass  
-            else:  
-                # 異なるQueryResultの場合のみ更新  
-                self.application_coordinator.edit_widget_manager.set_current_query_results(query_result)  
-            
+            if current_editor:  
+                current_query_result = current_editor.get_current_query_result()  # 修正箇所  
+                if current_query_result == query_result:  
+                    # 同じQueryResultの場合、現在の編集状態を保持  
+                    # query_resultを上書きしない  
+                    pass  
+                else:  
+                    # 異なるQueryResultの場合のみ更新  
+                    self.application_coordinator.edit_widget_manager.set_current_query_results(query_result)  
+              
             # 選択された区間を設定  
             self.application_coordinator.edit_widget_manager.set_selected_interval(selected_interval, selected_index)  
-            
+              
             # Timeline上でハイライト  
             if self.application_coordinator.timeline_display_manager:  
                 self.application_coordinator.timeline_display_manager.set_highlighted_interval(selected_interval)  
-            
+              
             # 動画シーク  
             if self.application_coordinator.video_player_controller:  
                 self.application_coordinator.video_player_controller.seek_to_time(selected_interval.start_time)
