@@ -316,27 +316,17 @@ class TimelineDisplayManager(QWidget):
         step_intervals = []  
           
         if results_data_controller:  
-            # ステップ用QueryResultsを取得（"Step:"で始まるクエリ）  
             step_query_results = results_data_controller.get_step_query_results()  
               
             for query_result in step_query_results:  
-                # "Step:"プレフィックスを除去してステップテキストを取得  
                 step_text = query_result.query_text.replace("Step:", "").strip()  
                   
-                # QueryResultsの区間情報からDetectionIntervalを作成  
+                # 既存のDetectionIntervalを直接使用（新しく作成しない）  
                 for interval in query_result.relevant_windows:  
-                    # 新しいDetectionIntervalを作成（既存の区間をコピー）  
-                    step_interval = DetectionInterval(  
-                        start_time=interval.start_time,  
-                        end_time=interval.end_time,  
-                        confidence_score=1.0,  # ステップは常に信頼度1.0  
-                        label=step_text,
-                        query_type="step"
-                    )  
-                      
-                    # 元のQueryResultsを参照として設定  
-                    step_interval.query_result = query_result  
-                    step_intervals.append(step_interval)  
+                    # ラベルとquery_typeを設定  
+                    interval.label = step_text  
+                    interval.query_type = "step"  
+                    step_intervals.append(interval)  
           
         return step_intervals
   

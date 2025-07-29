@@ -23,6 +23,11 @@ class ApplicationCoordinator(QObject):
     def __init__(self, main_window=None):  
         super().__init__()  
         self.main_window = main_window  
+
+        # ドラッグ状態管理を追加  
+        self.drag_original_start = None  
+        self.drag_original_end = None  
+        self.dragging_interval = None  
           
         # データコントローラー  
         self.video_data_controller = VideoDataController()  
@@ -233,40 +238,48 @@ class ApplicationCoordinator(QObject):
 
     def handle_interval_drag_started(self, interval: DetectionInterval):  
         """区間ドラッグ開始時の処理"""  
-        # 元の値を保存（Undo用）  
-        if hasattr(self.main_window, 'drag_original_start'):  
-            self.main_window.drag_original_start = interval.start_time  
-            self.main_window.drag_original_end = interval.end_time  
-            self.main_window.dragging_interval = interval  
+        print(f"[DEBUG] Drag started for interval: start={interval.start_time}, end={interval.end_time}")  
+          
+        # ApplicationCoordinator自体に保存  
+        self.drag_original_start = interval.start_time  
+        self.drag_original_end = interval.end_time  
+        self.dragging_interval = interval  
+        print(f"[DEBUG] Saved original values: start={self.drag_original_start}, end={self.drag_original_end}")
       
     def handle_interval_drag_moved(self, interval: DetectionInterval, new_start: float, new_end: float):  
-        """区間ドラッグ移動時の処理"""  
-        # リアルタイムで編集ウィジェットを更新  
+        print(f"[DEBUG] Drag moved: interval={interval}, new_start={new_start}, new_end={new_end}")  
+        print(f"[DEBUG] Interval query_type: {getattr(interval, 'query_type', 'unknown')}")  
+          
         if self.edit_widget_manager and hasattr(interval, 'query_result'):  
+            print(f"[DEBUG] Setting current query results: {interval.query_result.query_text}")  
             self.edit_widget_manager.set_current_query_results(interval.query_result)  
-            try:  
-                index = interval.query_result.relevant_windows.index(interval)  
-                self.edit_widget_manager.set_selected_interval(interval, index)  
-
-                # Step区間の場合は追加でリアルタイム更新  
-                if interval.query_type == "step":
-                    step_editor = self.edit_widget_manager.get_step_editor()  
-                    if step_editor:  
-                        step_editor.update_interval_realtime(new_start, new_end)  
-
-            except ValueError:  
-                pass  
+              
+            if interval.query_type == "step":  
+                print(f"[DEBUG] Step interval detected, updating realtime")  
+                step_editor = self.edit_widget_manager.get_step_editor()  
+                if step_editor:  
+                    step_editor.update_interval_realtime(new_start, new_end)  
+                    print(f"[DEBUG] Step editor realtime update called")
       
+
     def handle_interval_drag_finished(self, interval: DetectionInterval, new_start: float, new_end: float):  
         """区間ドラッグ完了時の処理"""  
-        if self.main_window and hasattr(self.main_window, 'undo_stack') and self.command_factory:  
-            old_start = getattr(self.main_window, 'drag_original_start', interval.start_time)  
-            old_end = getattr(self.main_window, 'drag_original_end', interval.end_time)  
+        print(f"[DEBUG] Drag finished: interval={interval}, new_start={new_start}, new_end={new_end}")  
+        print(f"[DEBUG] Interval query_type: {getattr(interval, 'query_type', 'unknown')}")  
+        if self.command_factory:  
+            old_start = self.drag_original_start if self.drag_original_start is not None else interval.start_time  
+            old_end = self.drag_original_end if self.drag_original_end is not None else interval.end_time  
+            print(f"[DEBUG] Creating command: old_start={old_start}, old_end={old_end}, new_start={new_start}, new_end={new_end}")  
               
-            # 統一されたIntervalEditCommandを使用  
             self.command_factory.create_and_execute_interval_modify(  
                 interval, old_start, old_end, new_start, new_end  
-            )
+            )  
+            print(f"[DEBUG] Command executed")
+              
+            # ドラッグ状態をクリア  
+            self.drag_original_start = None  
+            self.drag_original_end = None  
+            self.dragging_interval = None
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
         """修正版：ResultsDataControllerを使用"""  

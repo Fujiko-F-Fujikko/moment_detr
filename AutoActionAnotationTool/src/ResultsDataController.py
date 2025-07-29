@@ -179,19 +179,23 @@ class ResultsDataController(QObject):
             self.resultsUpdated.emit(self.all_results)  
       
     def modify_step_segment(self, step_text: str, new_segment: list):  
-        """ステップセグメントを修正"""  
+        print(f"[DEBUG] modify_step_segment called: step_text={step_text}, new_segment={new_segment}")  
         target_query_text = f"Step:{step_text}"  
           
         for query_result in self.all_results:  
             if query_result.query_text == target_query_text:  
+                print(f"[DEBUG] Found matching step: {query_result.query_text}")  
                 if query_result.relevant_windows:  
                     interval = query_result.relevant_windows[0]  
+                    print(f"[DEBUG] Before modify: start={interval.start_time}, end={interval.end_time}")  
                     interval.start_time = new_segment[0]  
                     interval.end_time = new_segment[1]  
+                    print(f"[DEBUG] After modify: start={interval.start_time}, end={interval.end_time}")  
                     break  
           
         self._apply_current_filters()  
         self.resultsUpdated.emit(self.all_results)  
+        print(f"[DEBUG] Step segment modification completed")
       
     def get_step_query_results(self) -> List[QueryResults]:  
         """ステップ用のQueryResultsを取得"""  

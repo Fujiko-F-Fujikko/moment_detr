@@ -336,13 +336,15 @@ class StepEditor(QWidget):
             new_start = self.step_start_spin.value()  
             new_end = self.step_end_spin.value()  
               
-            if (abs(interval.start_time - new_start) > 0.01 or   
-                abs(interval.end_time - new_end) > 0.01):  
-                  
+            print(f"[DEBUG] StepEditor segment change: old_start={interval.start_time}, old_end={interval.end_time}")  
+            print(f"[DEBUG] StepEditor segment change: new_start={new_start}, new_end={new_end}")  
+              
+            if (abs(interval.start_time - new_start) > 0.01 or abs(interval.end_time - new_end) > 0.01):  
                 if self.command_factory:  
+                    print(f"[DEBUG] Creating interval modify command from StepEditor")  
                     self.command_factory.create_and_execute_interval_modify(  
                         interval, interval.start_time, interval.end_time, new_start, new_end  
-                    )  
+                    )
           
         self._load_step_data()  
         self.refresh_step_list()  

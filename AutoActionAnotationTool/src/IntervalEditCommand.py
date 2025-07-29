@@ -12,14 +12,38 @@ class IntervalEditCommand(QUndoCommand):
         self.main_window = main_window  
           
     def redo(self):  
+        print(f"[DEBUG] IntervalEditCommand.redo: interval={self.interval}")  
+        print(f"[DEBUG] Before: start={self.interval.start_time}, end={self.interval.end_time}")  
         self.interval.start_time = self.new_start  
         self.interval.end_time = self.new_end  
-        self._update_ui()  
+        print(f"[DEBUG] After: start={self.interval.start_time}, end={self.interval.end_time}")  
+
+        # QueryResults内の対応するintervalも更新  
+        if hasattr(self.interval, 'query_result') and self.interval.query_result:  
+            for i, window in enumerate(self.interval.query_result.relevant_windows):  
+                if window == self.interval:  
+                    window.start_time = self.new_start  
+                    window.end_time = self.new_end  
+                    break  
           
+        self._update_ui()
+      
     def undo(self):  
+        print(f"[DEBUG] IntervalEditCommand.undo: interval={self.interval}")  
+        print(f"[DEBUG] Before: start={self.interval.start_time}, end={self.interval.end_time}")  
         self.interval.start_time = self.old_start  
         self.interval.end_time = self.old_end  
-        self._update_ui()  
+        print(f"[DEBUG] After: start={self.interval.start_time}, end={self.interval.end_time}")  
+          
+        # QueryResults内の対応するintervalも更新  
+        if hasattr(self.interval, 'query_result') and self.interval.query_result:  
+            for i, window in enumerate(self.interval.query_result.relevant_windows):  
+                if window == self.interval:  
+                    window.start_time = self.old_start  
+                    window.end_time = self.old_end  
+                    break  
+          
+        self._update_ui()
       
     def _update_ui(self):  
         if self.main_window:  
