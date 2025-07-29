@@ -425,6 +425,14 @@ class ActionEditor(QWidget):
         # 新しいQueryResultsをcurrent_query_resultsに追加  
         self.main_window.application_coordinator.current_query_results.append(independent_query_result)
 
+        # STTDataControllerにアクションカテゴリを確実に追加  
+        stt_controller = self.main_window.application_coordinator.get_stt_data_controller()  
+        if stt_controller:  
+            # アクションカテゴリを強制的に作成  
+            stt_controller._get_or_create_action_category(independent_query_result.query_text)  
+            # データセット更新シグナルを発信  
+            stt_controller.datasetUpdated.emit()  
+
         self.command_factory.create_and_execute_interval_add(    
             independent_query_result, new_interval    
         )  

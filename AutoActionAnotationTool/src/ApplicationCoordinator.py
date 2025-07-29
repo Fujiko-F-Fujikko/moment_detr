@@ -360,7 +360,16 @@ class ApplicationCoordinator(QObject):
                     self.command_factory.create_and_execute_interval_add(    
                         independent_query_result, new_interval    
                     )  
-    
+
+                    # 新しいQueryResultsを作成後、STTDataControllerにも反映  
+                    stt_controller = self.get_stt_data_controller()  
+                    if stt_controller:  
+                        video_name = self.video_data_controller.get_video_name()  
+                        # 新しいアクションカテゴリを強制的に作成  
+                        stt_controller._get_or_create_action_category(independent_query_result.query_text)  
+                        # データセット更新シグナルを発信  
+                        stt_controller.datasetUpdated.emit()
+
                     # Timeline上でハイライト表示    
                     if self.timeline_display_manager:    
                         self.timeline_display_manager.set_highlighted_interval(new_interval)

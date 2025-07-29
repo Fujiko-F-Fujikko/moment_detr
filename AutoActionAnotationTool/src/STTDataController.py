@@ -9,6 +9,7 @@ from DetectionInterval import DetectionInterval
 from STTDataStructures import *  
 from Results import QueryResults  
 from VideoInfo import VideoInfo  
+from Utilities import show_call_stack
   
 class STTDataController(QObject):  
     """STTデータセットの管理を担当するクラス"""  
@@ -27,6 +28,7 @@ class STTDataController(QObject):
         self.action_id_counter = 1  
         self.step_id_counter = 1  
         self.application_coordinator = application_coordinator
+        self.confidence_threshold = 0.0  # デフォルトの信頼度閾値
       
     def add_video_data(self, video_info: VideoInfo, subset: str = "train") -> bool:  
         """動画データを追加"""  
@@ -216,8 +218,10 @@ class STTDataController(QObject):
         self.datasetUpdated.emit()  
         return True  
       
-    def export_to_json(self, file_path: str) -> bool:  
+    def export_to_json(self, file_path: str, confidence_threshold: float = 0.0):  
         """STTデータセットをJSONファイルにエクスポート"""  
+        self.confidence_threshold = confidence_threshold  # 閾値を保存
+        print(f"Exporting STT dataset to {file_path} with confidence threshold {confidence_threshold}")
         try:  
             # データセットを辞書に変換  
             dataset_dict = asdict(self.stt_dataset)  
@@ -296,25 +300,25 @@ class STTDataController(QObject):
             self._process_query_result(video_data, query_result)
 
     def _process_query_result(self, video_data: VideoData, query_result: QueryResults):  
-        """個別のQueryResultsを処理してActionEntryを作成"""  
-        # Stepクエリの場合はスキップ  
+        """個別のQueryResultsを処理してActionEntryを作成（confidence閾値対応）"""  
         if query_result.query_text.startswith("Step:"):  
             return  
           
         try:  
-            # QueryParserを使用してクエリを解析  
             hand_type, action_data = QueryParser.validate_and_parse_query(query_result.query_text)  
-              
-            # 手の種類をマッピング  
             hand_category = QueryParser.detect_hand_type(query_result.query_text)  
+
+            # アクションカテゴリを確実に作成  
+            action_id = self._get_or_create_action_category(query_result.query_text)  
               
-            # 各DetectionIntervalに対してActionEntryを作成  
+            # confidence閾値以上のintervalのみを処理  
             for interval in query_result.relevant_windows:  
-                action_entry = self._create_action_entry(action_data, interval)  
-                video_data.actions[hand_category].append(action_entry)  
-                  
+                if interval.confidence_score >= self.confidence_threshold:  
+                    action_entry = self._create_action_entry(action_data, interval)  
+                    action_entry.id = action_id  # アクションIDを設定
+                    video_data.actions[hand_category].append(action_entry)  
+                      
         except QueryValidationError:  
-            # 解析に失敗した場合はスキップ  
             print(f"Failed to parse query: {query_result.query_text}")  
             pass
 
