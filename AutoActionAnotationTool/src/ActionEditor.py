@@ -369,23 +369,43 @@ class ActionEditor(QWidget):
             
         return f"{hand_type}_{action_verb}_{manipulated_object}_{target_object}_{tool}"    
       
-    def delete_interval(self):    
-        """区間を削除"""    
-        current_query_result = self.get_current_query_result()  # 修正箇所  
-        if (self._is_initializing or not self.selected_interval or     
-            not current_query_result or not self.command_factory):   
-            print("DEBUG: Early return due to missing conditions")     
-            return    
+    def delete_interval(self):  
+        """区間を削除"""  
+        current_query_result = self.get_current_query_result()  
+        if (self._is_initializing or not self.selected_interval or   
+            not current_query_result or not self.command_factory):  
+            print("DEBUG: Early return due to missing conditions")  
+            return  
           
-        index = current_query_result.relevant_windows.index(self.selected_interval)    
-            
-        self.command_factory.create_and_execute_interval_delete(    
-            current_query_result, self.selected_interval, index  # 修正箇所  
-        )    
-            
-        # シグナル発信    
-        self.intervalDeleted.emit()    
-        self.dataChanged.emit()    
+        # interval_idまたは時間範囲で一致する区間を検索  
+        index = -1  
+        for i, interval in enumerate(current_query_result.relevant_windows):  
+            # interval_idが存在する場合はそれで比較  
+            if (hasattr(self.selected_interval, 'interval_id') and   
+                hasattr(interval, 'interval_id') and  
+                self.selected_interval.interval_id == interval.interval_id):  
+                index = i  
+                break  
+            # interval_idがない場合は時間範囲で比較  
+            elif (abs(interval.start_time - self.selected_interval.start_time) < 0.01 and  
+                  abs(interval.end_time - self.selected_interval.end_time) < 0.01):  
+                index = i  
+                break  
+          
+        if index == -1:  
+            print("DEBUG: Selected interval not found in current query result")  
+            return  
+          
+        # 実際のリスト内のオブジェクトを使用  
+        actual_interval = current_query_result.relevant_windows[index]  
+          
+        self.command_factory.create_and_execute_interval_delete(  
+            current_query_result, actual_interval, index  
+        )  
+          
+        # シグナル発信  
+        self.intervalDeleted.emit()  
+        self.dataChanged.emit()
     
     def add_new_interval(self, query_result: Optional[QueryResults] = None, start_time: Optional[float] = None, end_time: Optional[float] = None):    
         """修正版：ResultsDataControllerを使用"""    
