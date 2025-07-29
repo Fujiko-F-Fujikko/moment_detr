@@ -146,7 +146,7 @@ class ResultsDataController(QObject):
       
     # === ステップ管理機能 ===  
       
-    def get_steps_count(self, video_name: str) -> int:  
+    def get_steps_count(self) -> int:  
         """指定された動画のステップ数を取得"""  
         step_results = [qr for qr in self.all_results   
                        if qr.query_text.startswith("Step:")]  
@@ -165,7 +165,7 @@ class ResultsDataController(QObject):
             self._apply_current_filters()  
             self.resultsUpdated.emit(self.all_results)  
       
-    def modify_step_segment(self, video_name: str, step_text: str, new_segment: list):  
+    def modify_step_segment(self, step_text: str, new_segment: list):  
         """ステップセグメントを修正"""  
         target_query_text = f"Step:{step_text}"  
           

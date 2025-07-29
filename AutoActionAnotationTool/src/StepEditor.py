@@ -221,46 +221,61 @@ class StepEditor(QWidget):
             if widget:  
                 widget.blockSignals(block)  
       
-    def add_step(self):  
+    def add_step(self, query_result: Optional[QueryResults] = None, start_time: Optional[float] = None, end_time: Optional[float] = None):  
         """新しいステップを追加"""  
-        if not self.step_text_edit or not self.results_data_manager:  
+        if not self.results_data_manager:  
             return  
           
-        step_text = self.step_text_edit.text().strip()  
-        if not step_text:  
-            return  
+        # query_resultが指定されなかった場合はデフォルトを作成  
+        if query_result is None:  
+            if not self.step_text_edit:  
+                return  
+            step_text = self.step_text_edit.text().strip()  
+            if not step_text:  
+                return  
+                  
+            # デフォルトのQueryResultsを作成  
+            query_result = QueryResults(  
+                query_text=f"Step:{step_text}",  
+                video_id=self.current_video_name or "unknown",  
+                relevant_windows=[],  
+                saliency_scores=[],  
+                query_id=len(self.step_query_results)  
+            )  
+              
+            # ボタンクリック時のみテキストフィールドをクリア  
+            self.step_text_edit.clear()  
           
-        # 新しいQueryResultを作成  
-        new_query_result = QueryResults(  
-            query_text=f"Step:{step_text}",  
-            video_id=self.current_video_name or "unknown",  
-            relevant_windows=[],  
-            saliency_scores=[],  
-            query_id=len(self.step_query_results)  
-        )  
+        # Timeline上からの指定時間がある場合はそれを使用  
+        if start_time is not None and end_time is not None:  
+            calculated_start = start_time  
+            calculated_end = end_time  
+        else:  
+            # ボタンクリック時のデフォルト時間  
+            calculated_start = 0.0  
+            calculated_end = 1.0  
           
-        # デフォルトの区間を作成  
+        # 指定された時間で区間を作成  
         default_interval = DetectionInterval(  
-            start_time=0.0,  
-            end_time=1.0,  
+            start_time=calculated_start,  
+            end_time=calculated_end,  
             confidence_score=1.0,  
-            query_id=new_query_result.query_id  
+            query_id=query_result.query_id  
         )  
-        default_interval.query_result = new_query_result  
-        new_query_result.relevant_windows.append(default_interval)  
+        default_interval.query_result = query_result  
+        query_result.relevant_windows = [default_interval]  
           
         # ResultsDataControllerに追加  
         if self.command_factory:  
             self.command_factory.create_and_execute_step_add_query_result(  
-                self.results_data_manager, new_query_result  
+                self.results_data_manager, query_result  
             )  
           
-        self.step_text_edit.clear()  
         self._load_step_data()  
         self.refresh_step_list()  
         self.stepAdded.emit()  
-        self.dataChanged.emit()  
-      
+        self.dataChanged.emit()
+        
     def _on_step_text_changed(self):  
         """ステップテキスト変更時の処理（遅延実行）"""  
         if not self._step_timer:  

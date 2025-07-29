@@ -139,7 +139,6 @@ class ApplicationCoordinator(QObject):
         # 結果データの同期  
         filtered_results = self.results_data_controller.get_filtered_results()  
         if self.timeline_display_manager:  
-            video_name = self.video_data_controller.get_video_name()  
             self.timeline_display_manager.set_query_results(  
                 filtered_results, self.results_data_controller
             )  
@@ -278,85 +277,52 @@ class ApplicationCoordinator(QObject):
             )
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):  
-        """新規区間作成時の処理"""  
+        """新規区間作成時の処理（統一版）"""  
+        if not self.edit_widget_manager:  
+            return  
+              
         if timeline_type == "Steps":  
-            # Step用の新規区間作成処理  
-            video_name = self.video_data_controller.get_video_name()  
-            if video_name and self.results_data_controller and self.command_factory:  
-                # ResultsDataControllerからステップ数を取得  
-                steps_count = self.results_data_controller.get_steps_count(video_name)  
-                step_text = f"New Step {steps_count + 1}" if steps_count >= 0 else "New Step 1"  
-                  
-                new_query_result = QueryResults(  
-                    query_text=f"Step:{step_text}",  
-                    video_id=video_name or "unknown",  
-                    relevant_windows=[],  
-                    saliency_scores=[],  
-                    query_id=len(self.results_data_controller.get_all_results())  
-                )  
-                  
-                # デフォルトの区間を作成  
-                default_interval = DetectionInterval(  
-                    start_time=start_time,  
-                    end_time=end_time,  
-                    confidence_score=1.0,  
-                    query_id=new_query_result.query_id  
-                )  
-                default_interval.query_result = new_query_result  
-                new_query_result.relevant_windows.append(default_interval)  
-                  
-                # ResultsDataControllerに追加  
-                self.results_data_controller.add_step_query_result(new_query_result)
-
-                # StepEditorのシグナルを発信  
-                if self.edit_widget_manager:  
-                    step_editor = self.edit_widget_manager.get_step_editor()  
-                    if step_editor:  
-                        step_editor.stepAdded.emit()  
-                        step_editor.dataChanged.emit()
+            # StepEditorのadd_stepを活用  
+            step_editor = self.edit_widget_manager.get_step_editor()  
+            if step_editor:  
+                # ステップテキストを生成  
+                video_name = self.video_data_controller.get_video_name()  
+                if video_name and self.results_data_controller:  
+                    steps_count = self.results_data_controller.get_steps_count()  
+                    step_text = f"New Step {steps_count + 1}" if steps_count >= 0 else "New Step 1"  
+                      
+                    # QueryResultsインスタンスを作成  
+                    new_query_result = QueryResults(  
+                        query_text=f"Step:{step_text}",  
+                        video_id=video_name,  
+                        relevant_windows=[],  
+                        saliency_scores=[],  
+                        query_id=len(self.results_data_controller.get_all_results())  
+                    )  
+                      
+                    # QueryResultsインスタンスを渡してステップ作成  
+                    step_editor.add_step(new_query_result, start_time, end_time)  
         else:  
-            # Action用の新規区間作成処理（修正版）  
-            if self.current_query_results and self.command_factory:  
-                # 現在選択されているIntervalのQueryResultsを優先的に使用  
+            # ActionEditorのadd_new_intervalを活用  
+            action_editor = self.edit_widget_manager.get_action_editor()  
+            if action_editor and self.current_query_results:  
+                # 適切なQueryResultを選択またはコピー  
                 source_query_result = None  
-
-                # ドラッグした領域のtimeline_type に基づいてQueryResultを選択  
                 for query_result in self.current_query_results:  
                     if timeline_type in query_result.query_text:  
                         source_query_result = query_result  
                         break  
-
-                if not source_query_result:  
-                    source_query_result = self.current_query_results[0] if self.current_query_results else None  
-
+                  
+                if not source_query_result and self.current_query_results:  
+                    source_query_result = self.current_query_results[0]  
+                  
                 if source_query_result:  
-                    # 独立したQueryResultsを作成  
+                    # 独立したQueryResultsインスタンスを作成  
                     import copy  
                     independent_query_result = copy.deepcopy(source_query_result)  
-                    
-                    new_interval = DetectionInterval(start_time, end_time, 1.0, 0)    
-                    # relevant_windowsを空にする 
-                    independent_query_result.relevant_windows = []
-                    new_interval.query_result = independent_query_result    
-
-                    # 新しいQueryResultsをcurrent_query_resultsに追加  
-                    self.current_query_results.append(independent_query_result)
-
-                    # EditCommandFactoryを使用    
-                    self.command_factory.create_and_execute_interval_add(    
-                        independent_query_result, new_interval    
-                    )  
-    
-                    # Timeline上でハイライト表示    
-                    if self.timeline_display_manager:    
-                        self.timeline_display_manager.set_highlighted_interval(new_interval)
-
-                    # ActionEditorのシグナルを発信  
-                    if self.edit_widget_manager:  
-                        action_editor = self.edit_widget_manager.get_action_editor()  
-                        if action_editor:  
-                            action_editor.intervalAdded.emit()  
-                            action_editor.dataChanged.emit()
+                      
+                    # QueryResultsインスタンスを渡して区間作成  
+                    action_editor.add_new_interval(independent_query_result, start_time, end_time)
 
     def handle_time_position_changed(self, time: float):  
         """時間位置変更時の処理"""  
@@ -401,15 +367,11 @@ class ApplicationCoordinator(QObject):
         self.synchronize_components()  
         self.dataChanged.emit()  
       
-    def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
+    def handle_step_segment_update(self, step_text: str, new_segment: list):  
         """ステップセグメント更新の処理"""  
-        video_name = self.video_data_controller.get_video_name()  
-        if video_name and self.results_data_controller:  
-            # ResultsDataControllerにステップ修正メソッドを追加  
-            self.results_data_controller.modify_step_segment(  
-                video_name, step_text, new_segment  
-            )  
-          
+        # ResultsDataControllerにステップ修正メソッドを追加  
+        self.results_data_controller.modify_step_segment(step_text, new_segment)
+
         # コンポーネント同期  
         self.synchronize_step_updates()
 
@@ -423,7 +385,6 @@ class ApplicationCoordinator(QObject):
         """ステップ更新の同期"""  
         # STTデータの変更をタイムラインに反映  
         if self.timeline_display_manager:  
-            video_name = self.video_data_controller.get_video_name()  
             filtered_results = self.results_data_controller.get_filtered_results()  
             self.timeline_display_manager.set_query_results(  
                 filtered_results, self.results_data_controller
