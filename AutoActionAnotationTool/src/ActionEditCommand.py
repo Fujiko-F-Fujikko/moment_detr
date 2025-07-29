@@ -54,3 +54,39 @@ class ActionDetailModifyCommand(QUndoCommand):
             if results_controller:  
                 results_controller._apply_current_filters()  
             coordinator.synchronize_components()
+
+class StepTextModifyCommand(QUndoCommand):  
+    def __init__(self, query_result, old_query_text, new_query_text, results_data_controller, main_window, description="Modify Step Text"):  
+        super().__init__(description)  
+        self.query_result = query_result  
+        self.old_query_text = old_query_text  
+        self.new_query_text = new_query_text  
+        self.results_data_controller = results_data_controller  
+        self.main_window = main_window  
+          
+    def redo(self):  
+        # ResultsDataControllerのall_results内の該当オブジェクトを直接更新  
+        if self.results_data_controller:  
+            for qr in self.results_data_controller.all_results:  
+                if qr == self.query_result:  
+                    qr.query_text = self.new_query_text  
+                    break  
+        self._update_ui()  
+          
+    def undo(self):  
+        # ResultsDataControllerのall_results内の該当オブジェクトを直接更新  
+        if self.results_data_controller:  
+            for qr in self.results_data_controller.all_results:  
+                if qr == self.query_result:  
+                    qr.query_text = self.old_query_text  
+                    break  
+        self._update_ui()  
+          
+    def _update_ui(self):  
+        if self.main_window:  
+            self.main_window.update_display()  
+              
+        if self.results_data_controller:  
+            # フィルタを再適用してUIを更新  
+            self.results_data_controller._apply_current_filters()  
+            self.results_data_controller.resultsUpdated.emit(self.results_data_controller.all_results)

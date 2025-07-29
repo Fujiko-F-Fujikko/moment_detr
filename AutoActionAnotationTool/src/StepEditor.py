@@ -273,13 +273,15 @@ class StepEditor(QWidget):
         
     def _on_step_text_changed(self):  
         """ステップテキスト変更時の処理（遅延実行）"""  
+        print(f"[DEBUG] _on_step_text_changed called, new text: {self.step_edit_text.text()}")  
         if self._step_timer is None:  
             self._step_timer = QTimer()  
             self._step_timer.timeout.connect(self.apply_step_changes)  
           
         self._step_timer.stop()  
         self._step_timer.setSingleShot(True)  
-        self._step_timer.start(500)  # 500ms後に実行  
+        self._step_timer.start(500)  
+        print(f"[DEBUG] Timer started for 500ms")
       
     def _on_segment_changed(self):  
         """セグメント変更時の処理（遅延実行）"""  
@@ -287,62 +289,102 @@ class StepEditor(QWidget):
       
     def apply_step_changes(self):  
         """ステップ変更を適用"""  
+        print(f"[DEBUG] apply_step_changes called")  
         current_item = self.step_list.currentItem()  
-        if current_item is None or self.results_data_controller is None or self.command_factory is None:  
+        if current_item is None:  
+            print(f"[DEBUG] ERROR: current_item is None")  
             return  
-          
+        if self.results_data_controller is None:  
+            print(f"[DEBUG] ERROR: results_data_controller is None")  
+            return  
+        if self.command_factory is None:  
+            print(f"[DEBUG] ERROR: command_factory is None")  
+            return  
+      
         index = current_item.data(1)  
+        print(f"[DEBUG] Selected item index: {index}")  
+      
         if index >= len(self.step_query_results):  
+            print(f"[DEBUG] ERROR: index {index} >= step_query_results length {len(self.step_query_results)}")  
             return  
-          
+      
         query_result = self.step_query_results[index]  
         old_text = query_result.query_text.replace("Step:", "").strip()  
         new_text = self.step_edit_text.text()  
-          
+      
+        print(f"[DEBUG] Text comparison - old: '{old_text}', new: '{new_text}'")  
+        print(f"[DEBUG] Text changed: {old_text != new_text}")  
+      
         # 時間変更の確認  
         time_changed = False  
         old_start = 0.0  
         old_end = 0.0  
         new_start = self.step_start_spin.value()  
         new_end = self.step_end_spin.value()  
-          
+      
         if query_result.relevant_windows:  
             interval = query_result.relevant_windows[0]  
             old_start = interval.start_time  
             old_end = interval.end_time  
             time_changed = (abs(old_start - new_start) > 0.01 or abs(old_end - new_end) > 0.01)  
-          
+      
+        print(f"[DEBUG] Time comparison - old: start={old_start}, end={old_end}")  
+        print(f"[DEBUG] Time comparison - new: start={new_start}, end={new_end}")  
+        print(f"[DEBUG] Time changed: {time_changed}")  
+      
         # テキスト変更の確認  
         text_changed = (old_text != new_text)  
-          
+      
         # 実際に変更があるかチェック  
         if not time_changed and not text_changed:  
+            print(f"[DEBUG] No changes detected, returning early")  
             return  
-          
+      
         # テキスト変更の処理  
         if text_changed:  
             old_query_text = query_result.query_text  
             new_query_text = f"Step:{new_text}"  
-              
+            print(f"[DEBUG] Executing text modify command: '{old_query_text}' -> '{new_query_text}'")  
+      
             if self.command_factory:  
                 self.command_factory.create_and_execute_step_text_modify(  
                     query_result, old_query_text, new_query_text  
                 )  
-          
+                print(f"[DEBUG] Text modify command executed")  
+            else:  
+                print(f"[DEBUG] ERROR: command_factory is None during text modify")  
+      
         # セグメント変更の処理  
         if time_changed and query_result.relevant_windows:  
             interval = query_result.relevant_windows[0]  
-              
+            print(f"[DEBUG] Executing interval modify command: {old_start}->{new_start}, {old_end}->{new_end}")  
+      
             if self.command_factory:  
                 self.command_factory.create_and_execute_interval_modify(  
                     interval, old_start, old_end, new_start, new_end  
                 )  
-          
+                print(f"[DEBUG] Interval modify command executed")  
+            else:  
+                print(f"[DEBUG] ERROR: command_factory is None during interval modify")  
+      
         # 変更があった場合のみUI更新とシグナル発信  
+        print(f"[DEBUG] Starting data refresh...")  
         self._load_step_data()  
+        print(f"[DEBUG] _load_step_data completed, step_query_results count: {len(self.step_query_results)}")  
+      
         self.refresh_step_list()  
+        print(f"[DEBUG] refresh_step_list completed, step_list count: {self.step_list.count()}")  
+      
+        # 更新後のクエリテキストを確認  
+        if index < len(self.step_query_results):  
+            updated_query_result = self.step_query_results[index]  
+            print(f"[DEBUG] Updated query_text: '{updated_query_result.query_text}'")  
+        else:  
+            print(f"[DEBUG] WARNING: index {index} out of range after refresh")  
+      
         self.stepModified.emit()  
-        self.dataChanged.emit()
+        self.dataChanged.emit()  
+        print(f"[DEBUG] Signals emitted")
       
     def delete_step(self):  
         """選択されたステップを削除"""  
