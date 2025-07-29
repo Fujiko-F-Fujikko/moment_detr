@@ -90,3 +90,11 @@ class StepTextModifyCommand(QUndoCommand):
             # フィルタを再適用してUIを更新  
             self.results_data_controller._apply_current_filters()  
             self.results_data_controller.resultsUpdated.emit(self.results_data_controller.all_results)
+
+        # StepEditorの選択状態を保持  
+        if hasattr(self.main_window, 'edit_widget_manager'):  
+            step_editor = self.main_window.edit_widget_manager.get_step_editor()  
+            if step_editor:  
+                # 変更されたQueryResultに対応するステップを再選択  
+                step_text = self.new_query_text.replace("Step:", "").strip()  
+                step_editor.select_step(step_text=step_text)
