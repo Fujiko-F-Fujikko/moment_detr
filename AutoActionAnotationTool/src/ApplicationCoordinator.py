@@ -29,7 +29,7 @@ class ApplicationCoordinator(QObject):
         # データコントローラー  
         self.video_data_controller = VideoDataController()  
         self.results_data_controller = ResultsDataController()  
-        self.stt_data_controller = STTDataController()  
+        self.stt_data_controller = STTDataController(self)  
           
         # UI管理コンポーネント  
         self.timeline_display_manager: Optional[TimelineDisplayManager] = None  

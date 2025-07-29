@@ -20,7 +20,7 @@ AutoActionAnnotationToolのリファクタリングをしています。 古い�
 - [ ] 16. 操作AをUndoする->操作Bをする->操作BをUndoする　としたとき、操作AのUndoをRedoできなくなる。スタックから消えてしまう？ ⇒ PyQt6のQUndoStackの標準的な動作によるものらしい。
 - [x] 17. Timeline上をドラッグしているときに、その場所に合わせて動画もseekしてほしい。
 - [x] jsonファイルをエクスポートするときにfile_typeとtimestampのprefixを付けたい
-- [ ] 後から追加したアノテーションデータがstt data export時に書かれない
+- [x] 後から追加したアノテーションデータがstt data export時に書かれない
 - [ ] Intervalが消せないときがある.Timeline上でクリックした後じゃないと消せない。DetectionResults上で選択しただけでも消せるようにしたい。
 - [ ] Undoするときに2回Undoしないと戻らないことがある。Intervalの移動・start/endの位置変更。一度目の変更はUndoできない。2回目の変更からUndoできるようになるが、2回Undo実行しないと戻らない。
 - [ ] jsonロード時、queryの形式が"_"で区切られたものではなかった場合、文章全体を最初のテキストボックスに入れ、残りのテキストボックスは空になった状態にしたい。

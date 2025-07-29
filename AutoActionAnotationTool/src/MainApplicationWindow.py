@@ -321,6 +321,14 @@ class MainApplicationWindow(QMainWindow):
         if not results_controller.is_results_loaded():  
             self.file_manager.show_no_results_warning(self)  
             return  
+
+        # エクスポート前に強制的にデータ同期を実行  
+        self.application_coordinator.synchronize_components()  
+          
+        # STTDataControllerに最新の編集内容を反映  
+        stt_controller = self.application_coordinator.get_stt_data_controller()  
+        if stt_controller:  
+            stt_controller.sync_from_results_data()  # この行を追加  
           
         # 動画ファイル名とタイムスタンプを含むファイル名を生成  
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
