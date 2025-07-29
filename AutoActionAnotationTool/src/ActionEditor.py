@@ -132,7 +132,7 @@ class ActionEditor(QWidget):
                 
             # ボタンクリック    
             # 修正：ラムダ関数を使用して引数なしで呼び出し  
-            self.add_button.clicked.connect(lambda: self.add_new_interval)    
+            self.add_button.clicked.connect(lambda: self.add_new_interval())    
             self.delete_button.clicked.connect(self.delete_interval)    
                 
             self._signals_connected = True    
@@ -428,7 +428,7 @@ class ActionEditor(QWidget):
             calculated_end = end_time    
         else:    
             # デフォルト時間計算    
-            default_duration = 5.0    
+            default_duration = 1.0    
             current_query_result = self.get_current_query_result()    
                 
             if self.selected_interval:    

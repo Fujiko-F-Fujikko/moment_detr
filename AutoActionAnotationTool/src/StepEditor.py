@@ -251,8 +251,9 @@ class StepEditor(QWidget):
             calculated_start = start_time  
             calculated_end = end_time  
         else:  
+            default_duration = 1.0
             calculated_start = 0.0  
-            calculated_end = 1.0  
+            calculated_end = calculated_start + default_duration
           
         # デフォルトの区間を作成  
         print(f"query_result: {query_result}, type: {type(query_result)}")
