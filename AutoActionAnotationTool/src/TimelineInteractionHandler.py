@@ -13,6 +13,7 @@ class TimelineInteractionHandler(QObject):
       
     # シグナル定義  
     intervalClicked = pyqtSignal(DetectionInterval)  
+    emptyAreaClicked = pyqtSignal(float)  # time_position
     timePositionChanged = pyqtSignal(float)  
     intervalDragStarted = pyqtSignal(DetectionInterval)  
     intervalDragMoved = pyqtSignal(DetectionInterval, float, float)  
@@ -111,10 +112,11 @@ class TimelineInteractionHandler(QObject):
                 distance = abs(event.position().x() - self.new_interval_start_pos)  
                 if distance >= self.min_drag_distance:  # 5ピクセル以上のドラッグ
                     self.newIntervalCreated.emit(self.new_interval_start_time, self.new_interval_end_time, self.timeline_type)
+            else:
+              self.emptyAreaClicked.emit(self.new_interval_start_time)  # 空白領域クリックとして処理
 
             self._reset_new_interval_state(timeline_data)
             return True
-          
         # ドラッグ完了  
         if self.is_dragging and self.dragging_interval:  
             new_start = self.dragging_interval.start_time  

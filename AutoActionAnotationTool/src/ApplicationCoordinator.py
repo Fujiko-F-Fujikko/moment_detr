@@ -80,6 +80,7 @@ class ApplicationCoordinator(QObject):
             self.timeline_display_manager.intervalDragFinished.connect(self.handle_interval_drag_finished)  
             self.timeline_display_manager.newIntervalCreated.connect(self.handle_new_interval_created)  
             self.timeline_display_manager.timePositionChanged.connect(self.handle_time_position_changed)  
+            self.timeline_display_manager.emptyAreaClicked.connect(self.handle_timeline_empty_area_clicked)
           
         if self.edit_widget_manager:  
             self.edit_widget_manager.intervalUpdated.connect(self.handle_interval_updated)  
@@ -431,6 +432,25 @@ class ApplicationCoordinator(QObject):
         
         # コンポーネント同期  
         self.synchronize_step_updates()
+
+    def handle_timeline_empty_area_clicked(self, time_position: float):  
+        """タイムライン空白エリアクリック時の処理"""  
+        print(f"Empty area clicked at time position: {time_position}")
+        # 選択状態をクリア  
+        if self.edit_widget_manager:  
+            self.edit_widget_manager.clear_selection()  
+          
+        # タイムライン上のハイライトをクリア  
+        if self.timeline_display_manager:  
+            self.timeline_display_manager.clear_highlighted_interval()  
+          
+        # 動画をクリック位置にシーク  
+        if self.video_player_controller:  
+            self.video_player_controller.seek_to_time(time_position)
+        
+        # 完全なコンポーネント同期を実行  
+        self.synchronize_timeline_updates()
+        self.synchronize_components()  
 
     def synchronize_timeline_updates(self):  
         """タイムライン更新の同期"""  

@@ -16,6 +16,7 @@ class TimelineDisplayManager(QWidget):
         
     # 統合シグナル定義    
     intervalClicked = pyqtSignal(object, object)  # (interval, query_result)    
+    emptyAreaClicked = pyqtSignal(float)  # time_position
     intervalDragStarted = pyqtSignal(DetectionInterval)    
     intervalDragMoved = pyqtSignal(DetectionInterval, float, float)    
     intervalDragFinished = pyqtSignal(DetectionInterval, float, float)    
@@ -86,6 +87,9 @@ class TimelineDisplayManager(QWidget):
         )
         _interaction_handler.cursorChanged.connect(  
             lambda cursor: self._update_widget_cursor(cursor)  
+        )
+        _interaction_handler.emptyAreaClicked.connect(  
+            lambda time_position: self.emptyAreaClicked.emit(time_position) 
         )
 
     def set_query_results(self, query_results_list: List[QueryResults],     
@@ -379,7 +383,12 @@ class TimelineDisplayManager(QWidget):
             timeline = self._find_timeline_widget(widget)    
             if timeline:    
                 timeline.set_highlighted_interval(interval)    
-      
+
+    def clear_highlighted_interval(self):  
+        """Timeline上のハイライト表示をクリア"""  
+        self.highlighted_interval = None  
+        self.update()  # 再描画してハイライトを消去
+
     # Phase 3で追加された機能拡張メソッド  
     def on_interval_clicked_with_embedded_query(self, interval, timeline_type: str = None):  
         """区間クリック時の埋め込みクエリ処理（古いMultiTimelineViewerの機能移行）"""  
