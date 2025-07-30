@@ -28,6 +28,9 @@ class MainApplicationWindow(QMainWindow):
         # Undo/Redoスタックを初期化  
         self.undo_stack = QUndoStack(self)  
           
+        # UndoStackの変更を監視  
+        self.undo_stack.indexChanged.connect(self._debug_undo_stack_changed)
+          
         # コアコンポーネントを初期化  
         self.application_coordinator = ApplicationCoordinator(self)  
         self.timeline_display_manager = TimelineDisplayManager()  
@@ -228,21 +231,13 @@ class MainApplicationWindow(QMainWindow):
     def on_interval_selected(self, query_result, interval=None, index=0):  
         """Detection Results一覧からの選択処理（修正版）"""  
         if query_result and hasattr(query_result, 'relevant_windows') and query_result.relevant_windows:  
-            # 実際にクリックされた区間を使用（引数で渡された場合）  
             selected_interval = interval if interval else query_result.relevant_windows[0]  
             selected_index = index if interval else 0  
-            
-            # 重要：現在のAction Editorの状態を保存  
-            current_editor = self.application_coordinator.edit_widget_manager.get_action_editor()  
-            if current_editor and current_editor.current_query_result == query_result:  
-                # 同じQueryResultの場合、現在の編集状態を保持  
-                # query_resultを上書きしない  
-                pass  
-            else:  
-                # 異なるQueryResultの場合のみ更新  
-                self.application_coordinator.edit_widget_manager.set_current_query_results(query_result)  
-            
-            # 選択された区間を設定  
+              
+            # 重要：intervalに埋め込まれたquery_resultを優先使用  
+            actual_query_result = selected_interval.query_result if hasattr(selected_interval, 'query_result') else query_result  
+              
+            self.application_coordinator.edit_widget_manager.set_current_query_results(actual_query_result)  
             self.application_coordinator.edit_widget_manager.set_selected_interval(selected_interval, selected_index)  
             
             # Timeline上でハイライト  
@@ -407,6 +402,12 @@ class MainApplicationWindow(QMainWindow):
             'undo_stack_count': self.undo_stack.count(),  
             'undo_stack_index': self.undo_stack.index()  
         }  
+
+    def _debug_undo_stack_changed(self, index):  
+        """UndoStackの変更をログ出力"""  
+        print(f"DEBUG: UndoStack changed - index: {index}, count: {self.undo_stack.count()}")  
+        if self.undo_stack.count() > 0:  
+            print(f"DEBUG: Current command: {self.undo_stack.command(index-1).text() if index > 0 else 'None'}")
   
   
 def main():  
