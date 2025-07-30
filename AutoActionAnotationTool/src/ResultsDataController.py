@@ -99,6 +99,10 @@ class ResultsDataController(QObject):
         """信頼度でフィルタリング"""  
         filtered_results = []  
         for result in results:  
+            # saliency_scoresが存在しない場合はそのまま通す  
+            if not hasattr(result, 'saliency_scores'):  
+                filtered_results.append(result)  
+                continue
             # 信頼度閾値を満たす区間のみを含む新しいQueryResultsを作成  
             filtered_intervals = [  
                 interval for interval in result.relevant_windows  

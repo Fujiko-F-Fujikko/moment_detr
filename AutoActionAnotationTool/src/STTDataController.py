@@ -5,9 +5,11 @@ from typing import Dict, List
 from dataclasses import asdict  
 from PyQt6.QtCore import QObject, pyqtSignal  
   
+from DetectionInterval import DetectionInterval
 from STTDataStructures import *  
 from Results import QueryResults  
 from VideoInfo import VideoInfo  
+from Utilities import show_call_stack
   
 class STTDataController(QObject):  
     """STTデータセットの管理を担当するクラス"""  
@@ -20,11 +22,13 @@ class STTDataController(QObject):
     actionAdded = pyqtSignal(str, str)  # video_name, action_text  
     exportCompleted = pyqtSignal(str)  # file_path  
       
-    def __init__(self):  
+    def __init__(self, application_coordinator=None):  
         super().__init__()  
         self.stt_dataset = STTDataset()  
         self.action_id_counter = 1  
         self.step_id_counter = 1  
+        self.application_coordinator = application_coordinator
+        self.confidence_threshold = 0.0  # デフォルトの信頼度閾値
       
     def add_video_data(self, video_info: VideoInfo, subset: str = "train") -> bool:  
         """動画データを追加"""  
@@ -214,8 +218,10 @@ class STTDataController(QObject):
         self.datasetUpdated.emit()  
         return True  
       
-    def export_to_json(self, file_path: str) -> bool:  
+    def export_to_json(self, file_path: str, confidence_threshold: float = 0.0):  
         """STTデータセットをJSONファイルにエクスポート"""  
+        self.confidence_threshold = confidence_threshold  # 閾値を保存
+        print(f"Exporting STT dataset to {file_path} with confidence threshold {confidence_threshold}")
         try:  
             # データセットを辞書に変換  
             dataset_dict = asdict(self.stt_dataset)  
@@ -249,3 +255,84 @@ class STTDataController(QObject):
         if video_name not in self.stt_dataset.database:  
             return []  
         return self.stt_dataset.database[video_name].steps
+
+    def sync_from_results_data(self):  
+        """ResultsDataControllerから最新の編集内容を同期"""  
+        # ApplicationCoordinatorを通じてResultsDataControllerを取得  
+        if not hasattr(self, 'application_coordinator'):  
+            return  
+          
+        results_controller = self.application_coordinator.get_results_data_controller()  
+        if not results_controller or not results_controller.is_results_loaded():  
+            return  
+          
+        # 現在のフィルタリング済み結果を取得  
+        current_results = results_controller.get_filtered_results()  
+        if not current_results:  
+            return  
+          
+        # 動画名を取得  
+        video_name = self.application_coordinator.video_data_controller.get_video_name()  
+        if not video_name:  
+            return  
+          
+        # STTデータセットの該当VideoDataを更新  
+        self._update_video_data_from_results(video_name, current_results)
+
+    def _update_video_data_from_results(self, video_name: str, results: List[QueryResults]):  
+        """QueryResultsからVideoDataを更新"""  
+        # VideoDataが存在しない場合は作成  
+        if video_name not in self.stt_dataset.database:  
+            self.stt_dataset.database[video_name] = VideoData()  
+          
+        video_data = self.stt_dataset.database[video_name]  
+          
+        # 既存のアクションエントリをクリア（完全同期）  
+        video_data.actions = {  
+            "left_hand": [],  
+            "right_hand": [],  
+            "both_hands": [],  
+            "unspecified": []  
+        }  
+          
+        # 各QueryResultsを処理  
+        for query_result in results:  
+            self._process_query_result(video_data, query_result)
+
+    def _process_query_result(self, video_data: VideoData, query_result: QueryResults):  
+        """個別のQueryResultsを処理してActionEntryを作成（confidence閾値対応）"""  
+        if query_result.query_text.startswith("Step:"):  
+            return  
+          
+        try:  
+            hand_type, action_data = QueryParser.validate_and_parse_query(query_result.query_text)  
+            hand_category = QueryParser.detect_hand_type(query_result.query_text)  
+
+            # アクションカテゴリを確実に作成  
+            action_id = self._get_or_create_action_category(query_result.query_text)  
+              
+            # confidence閾値以上のintervalのみを処理  
+            for interval in query_result.relevant_windows:  
+                if interval.confidence_score >= self.confidence_threshold:  
+                    action_entry = self._create_action_entry(action_data, interval)  
+                    action_entry.id = action_id  # アクションIDを設定
+                    video_data.actions[hand_category].append(action_entry)  
+                      
+        except QueryValidationError:  
+            print(f"Failed to parse query: {query_result.query_text}")  
+            pass
+
+    def _create_action_entry(self, action_data: ActionData, interval: DetectionInterval) -> ActionEntry:  
+        """DetectionIntervalからActionEntryを作成"""  
+        # フレーム数の計算（FPSが設定されている場合）  
+        fps = getattr(self.application_coordinator.video_data_controller, 'fps', 30.0)  
+        start_frame = int(interval.start_time * fps)  
+        end_frame = int(interval.end_time * fps)  
+          
+        return ActionEntry(  
+            action=action_data,  
+            ids=[],  # 必要に応じて設定  
+            id=hash(f"{interval.start_time}_{interval.end_time}_{action_data.action_verb}"),  
+            segment=[interval.start_time, interval.end_time],  
+            segment_frames=[start_frame, end_frame]  
+        )

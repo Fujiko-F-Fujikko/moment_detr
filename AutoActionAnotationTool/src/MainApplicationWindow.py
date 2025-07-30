@@ -321,6 +321,17 @@ class MainApplicationWindow(QMainWindow):
         if not results_controller.is_results_loaded():  
             self.file_manager.show_no_results_warning(self)  
             return  
+
+        # 現在のconfidence閾値を取得  
+        confidence_threshold = getattr(self, '_current_confidence_threshold', 0.0) 
+
+        # エクスポート前に強制的にデータ同期を実行  
+        self.application_coordinator.synchronize_components()  
+          
+        # STTDataControllerに最新の編集内容を反映  
+        stt_controller = self.application_coordinator.get_stt_data_controller()  
+        if stt_controller:  
+            stt_controller.sync_from_results_data()  # この行を追加  
           
         # 動画ファイル名とタイムスタンプを含むファイル名を生成  
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -335,7 +346,8 @@ class MainApplicationWindow(QMainWindow):
         if file_path:  
             try:  
                 stt_controller = self.application_coordinator.get_stt_data_controller()  
-                stt_controller.export_to_json(file_path)  
+                # confidence閾値を渡してエクスポート  
+                stt_controller.export_to_json(file_path, confidence_threshold=confidence_threshold)
             except Exception as e:  
                 self.file_manager.show_save_error_message(str(e), self)  
       
@@ -343,9 +355,10 @@ class MainApplicationWindow(QMainWindow):
     def update_confidence_filter(self, value: int):  
         """信頼度フィルタ更新"""  
         threshold = value / 100.0  
+        self._current_confidence_threshold = threshold  # 閾値を保存  
         if hasattr(self, 'confidence_value_label'):  
             self.confidence_value_label.setText(f"{threshold:.2f}")  
-        self.application_coordinator.set_confidence_threshold(threshold)  
+        self.application_coordinator.set_confidence_threshold(threshold)
       
     def update_hand_type_filter(self, hand_type: str):  
         """Hand Typeフィルタ更新"""  
