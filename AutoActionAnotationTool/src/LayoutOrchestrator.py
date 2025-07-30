@@ -33,9 +33,6 @@ class LayoutOrchestrator(QObject):
         self.control_panel_builder.confidenceChanged.connect(  
             self.main_window.update_confidence_filter  
         )  
-        self.control_panel_builder.handTypeFilterChanged.connect(  
-            self.main_window.update_hand_type_filter  
-        )  
         self.control_panel_builder.resultItemClicked.connect(  
             self.main_window.on_interval_selected  
         ) 

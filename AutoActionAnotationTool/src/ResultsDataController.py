@@ -18,7 +18,6 @@ class ResultsDataController(QObject):
         self.all_results: List[QueryResults] = []  
         self.filtered_results: List[QueryResults] = []  
         self.confidence_threshold: float = 0.0  
-        self.current_hand_type_filter: str = "All"  
           
         # データ処理コンポーネント  
         self.inference_loader = InferenceResultsLoader()  
@@ -47,53 +46,15 @@ class ResultsDataController(QObject):
         self.confidence_threshold = threshold  
         self._apply_current_filters()  
       
-    def set_hand_type_filter(self, hand_type: str):  
-        """Hand Typeフィルタを設定"""  
-        self.current_hand_type_filter = hand_type  
-        self._apply_current_filters()  
-      
     def _apply_current_filters(self):  
         """現在のフィルタ設定を適用"""  
-        # Hand Typeフィルタを適用  
-        if self.current_hand_type_filter == "All":  
-            filtered_by_hand_type = self.all_results.copy()  
-        else:  
-            filtered_by_hand_type = self._filter_by_hand_type(  
-                self.all_results, self.current_hand_type_filter  
-            )  
-          
         # 信頼度フィルタを適用  
         self.filtered_results = self._filter_by_confidence(  
-            filtered_by_hand_type, self.confidence_threshold  
+            self.all_results, self.confidence_threshold  
         )  
           
         # シグナル発信  
         self.resultsFiltered.emit(self.filtered_results)  
-      
-    def _filter_by_hand_type(self, results: List[QueryResults], hand_type: str) -> List[QueryResults]:  
-        """Hand Type別にフィルタリング"""  
-        if hand_type == "All":  
-            return results  
-        
-        filtered = []  
-        for result in results:  
-            # Stepクエリの場合は特別処理  
-            if result.query_text.startswith("Step:"):  
-                if hand_type == "Other":  
-                    filtered.append(result)  
-                continue  
-            
-            try:  
-                detected_hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
-                if detected_hand_type == hand_type:  
-                    filtered.append(result)  
-                elif hand_type == "Other" and detected_hand_type == "None":  # 古い実装に合わせて修正  
-                    filtered.append(result)  
-            except QueryValidationError:  
-                if hand_type == "Other":  
-                    filtered.append(result)  
-        
-        return filtered
       
     def _filter_by_confidence(self, results: List[QueryResults], threshold: float) -> List[QueryResults]:  
         """信頼度でフィルタリング"""  
@@ -168,7 +129,6 @@ class ResultsDataController(QObject):
         self.all_results.clear()  
         self.filtered_results.clear()  
         self.confidence_threshold = 0.0  
-        self.current_hand_type_filter = "All"
 
     def update_result(self, query_result: QueryResults) -> bool:  
         """特定の結果を更新"""  
@@ -241,6 +201,5 @@ class ResultsDataController(QObject):
             'total_results': len(self.all_results),  
             'filtered_results': len(self.filtered_results),  
             'confidence_threshold': self.confidence_threshold,  
-            'hand_type_filter': self.current_hand_type_filter,  
             'is_loaded': self.is_results_loaded()  
         }
