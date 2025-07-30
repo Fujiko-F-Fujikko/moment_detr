@@ -26,6 +26,6 @@ AutoActionAnnotationToolのリファクタリングをしています。 古い�
 - [x] Intervalが消せないときがある.Timeline上でクリックした後じゃないと消せない。DetectionResults上で選択しただけでも消せるようにしたい。
 - [x] Intervalのstart/endの変更・Intervalの移動のUndoができない。
 - [x] jsonロード時、queryの形式が"_"で区切られたものではなかった場合、文章全体を最初のテキストボックスに入れ、残りのテキストボックスは空になった状態にしたい。
-- [ ] Detection Resultsリスト上でのIntervalの表示を、区間時刻ではなくquery_text (confidence)にしたい。かつ、query_textを変えたらDetection Resultsにも変更を反映させたい。
+- [x] Detection Resultsリスト上でのIntervalの表示を、区間時刻ではなくquery_text (confidence)にしたい。かつ、query_textを変えたらDetection Resultsにも変更を反映させたい。
 
 古い実装を正として、これらの点に関して古い実装の通りに動作するように修正してください。

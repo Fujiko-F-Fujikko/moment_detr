@@ -66,7 +66,7 @@ class ResultsDisplayManager(QObject):
                 for i, interval in enumerate(result.relevant_windows):  
                     if interval.confidence_score >= self.results_controller.confidence_threshold:  
                         # 区間の詳細情報を表示  
-                        item_text = f"  {i+1}: {interval.start_time:.2f}s - {interval.end_time:.2f}s (conf: {interval.confidence_score:.4f})"  
+                        item_text = f"  {i+1}: {result.query_text} (conf: {interval.confidence_score:.4f})"  
                         item = QListWidgetItem(item_text)  
                         item.setData(Qt.ItemDataRole.UserRole, {'query_result': result, 'interval': interval, 'index': i})  
                         self.results_list.addItem(item)

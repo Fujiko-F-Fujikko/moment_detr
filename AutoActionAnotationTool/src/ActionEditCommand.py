@@ -20,7 +20,11 @@ class ActionDetailModifyCommand(QUndoCommand):
     def _update_ui(self):  
         if self.main_window:  
             self.main_window.update_display()  
-        
+
+        # ResultsDisplayManagerの更新を追加  
+        if hasattr(self.main_window, 'results_display_manager'):  
+            self.main_window.results_display_manager.update_display()
+
         # TimelineDisplayManagerの更新を追加  
         if hasattr(self.main_window, 'application_coordinator'):  
             # ApplicationCoordinatorを通じてTimelineDisplayManagerを更新  
