@@ -480,10 +480,6 @@ class ApplicationCoordinator(QObject):
         if self.timeline_display_manager:  
             self.timeline_display_manager.set_confidence_threshold(threshold)  
       
-    def set_hand_type_filter(self, hand_type: str):  
-        """Hand Typeフィルタを設定"""  
-        self.results_data_controller.set_hand_type_filter(hand_type)  
-      
     def get_video_data_controller(self) -> VideoDataController:  
         """VideoDataControllerを取得"""  
         return self.video_data_controller  

@@ -78,7 +78,7 @@ class ActionEditor(QWidget):
         # 手の種類選択  
         hand_layout = QHBoxLayout()  
         self.hand_combo = QComboBox()  
-        self.hand_combo.addItems(["left_hand", "right_hand", "both_hands", "unspecified"])  
+        self.hand_combo.addItems(["LeftHand", "RightHand", "BothHands", "None"])  
         hand_layout.addWidget(QLabel("Hand:"))  
         hand_layout.addWidget(self.hand_combo)  
         action_detail_layout.addLayout(hand_layout)  
@@ -212,15 +212,7 @@ class ActionEditor(QWidget):
           
         try:  
             hand_type, action_data = QueryParser.validate_and_parse_query(self.current_query_result.query_text)  
-              
-            # 手の種類を設定  
-            hand_mapping = {  
-                "LeftHand": "left_hand",   
-                "RightHand": "right_hand",   
-                "BothHands": "both_hands",   
-                "None": "unspecified"  
-            }  
-            self.hand_combo.setCurrentText(hand_mapping.get(hand_type, "unspecified"))  
+            self.hand_combo.setCurrentText(hand_type or "None")  
               
             # アクション要素を設定  
             self.action_verb_edit.setText(action_data.action_verb or "")  
@@ -233,7 +225,7 @@ class ActionEditor(QWidget):
             self.manipulated_object_edit.setText("")  
             self.target_object_edit.setText("")  
             self.tool_edit.setText("")  
-            self.hand_combo.setCurrentText("unspecified")  
+            self.hand_combo.setCurrentText("None")  
 
     def _clear_ui_fields(self):  
         """UIフィールドをクリア"""  
@@ -339,14 +331,7 @@ class ActionEditor(QWidget):
 
     def _build_new_query_text(self) -> str:  
         """入力フィールドから新しいクエリテキストを構築"""  
-        hand_mapping = {  
-            "left_hand": "LeftHand",   
-            "right_hand": "RightHand",   
-            "both_hands": "BothHands",   
-            "unspecified": "None"  
-        }  
-        hand_type = hand_mapping.get(self.hand_combo.currentText(), "None")  
-          
+        hand_type = self.hand_combo.currentText() or "None"  
         action_verb = self.action_verb_edit.text().strip() or "None"  
         manipulated_object = self.manipulated_object_edit.text().strip() or "None"  
         target_object = self.target_object_edit.text().strip() or "None"  

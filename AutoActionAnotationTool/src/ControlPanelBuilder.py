@@ -10,7 +10,6 @@ class ControlPanelBuilder(QWidget):
       
     # シグナル定義  
     confidenceChanged = pyqtSignal(float)  
-    handTypeFilterChanged = pyqtSignal(str)  
     resultItemClicked = pyqtSignal(object)  
       
     def __init__(self, parent=None):  
@@ -22,10 +21,6 @@ class ControlPanelBuilder(QWidget):
         """UIレイアウトの設定"""  
         layout = QVBoxLayout()  
           
-        # フィルタコントロールグループ  
-        filter_group = self.create_filter_controls()  
-        layout.addWidget(filter_group)  
-          
         # 結果表示グループ  
         results_group = self.create_results_display()  
         layout.addWidget(results_group)  
@@ -36,28 +31,6 @@ class ControlPanelBuilder(QWidget):
           
         self.setLayout(layout)  
       
-    def create_filter_controls(self) -> QGroupBox:  
-        """フィルタコントロールを作成"""  
-        group = QGroupBox("Filters")  
-        layout = QVBoxLayout()  
-          
-        # Hand Typeフィルタ  
-        hand_type_layout = QHBoxLayout()  
-        hand_type_label = QLabel("Hand Type:")  
-        hand_type_combo = QComboBox()  
-        hand_type_combo.addItems(["All", "LeftHand", "RightHand", "BothHands", "Other"])  
-        hand_type_combo.setCurrentText("All")  
-        hand_type_combo.currentTextChanged.connect(self.handTypeFilterChanged.emit)  
-          
-        hand_type_layout.addWidget(hand_type_label)  
-        hand_type_layout.addWidget(hand_type_combo)  
-        layout.addLayout(hand_type_layout)  
-          
-        # UI要素を保存  
-        self.ui_components['hand_type_combo'] = hand_type_combo  
-          
-        group.setLayout(layout)  
-        return group  
       
     def create_results_display(self) -> QGroupBox:  
         """結果表示を作成"""  

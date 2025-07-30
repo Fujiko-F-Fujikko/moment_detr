@@ -290,10 +290,10 @@ class STTDataController(QObject):
           
         # 既存のアクションエントリをクリア（完全同期）  
         video_data.actions = {  
-            "left_hand": [],  
-            "right_hand": [],  
-            "both_hands": [],  
-            "unspecified": []  
+            "LeftHand": [],  
+            "RightHand": [],  
+            "BothHands": [],  
+            "None": []  
         }  
           
         # 各QueryResultsを処理  

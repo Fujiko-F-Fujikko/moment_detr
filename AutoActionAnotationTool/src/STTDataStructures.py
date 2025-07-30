@@ -30,10 +30,10 @@ class VideoData:
     duration: float = 0.0  
     fps: float = 0.0  
     actions: Dict[str, List[ActionEntry]] = field(default_factory=lambda: {  
-        "left_hand": [],   
-        "right_hand": [],   
-        "both_hands": [],  # 新しく追加  
-        "unspecified": []  # 新しく追加  
+        "LeftHand": [],   
+        "RightHand": [],   
+        "BothHands": [],    
+        "Unspecified": []    
     })  
     steps: List[StepEntry] = field(default_factory=list)  
 
@@ -91,15 +91,12 @@ class QueryValidationError(Exception):
         return cls(message, query_text, "empty_field")  
 
 class QueryParser:  
-    # 許可される手の種類  
-    VALID_HAND_TYPES = {'LeftHand', 'RightHand', 'BothHands', 'None'}  
       
     @staticmethod  
     def validate_and_parse_query(query_text: str) -> Tuple[str, ActionData]:  
         """クエリテキストを検証し、アクション要素を抽出"""  
         #print(f"DEBUG: Parsing query: '{query_text}'")  
         parts = query_text.split('_')  
-        #print(f"DEBUG: Query parts: {parts} (count: {len(parts)})")  
         
         if len(parts) != 5:  
             error_msg = f"クエリ形式が不正です。5つの要素が必要ですが、{len(parts)}個の要素が見つかりました: '{query_text}'"  
@@ -107,14 +104,7 @@ class QueryParser:
             raise QueryValidationError(error_msg)  
         
         hand_type, action_verb, manipulated_object, target_object, tool = parts  
-        #print(f"DEBUG: Parsed - hand_type: {hand_type}, action_verb: {action_verb}")
 
-        # 手の種類の検証  
-        if hand_type not in QueryParser.VALID_HAND_TYPES:  
-            raise QueryValidationError(  
-                f"不正な手の種類です: '{hand_type}'. 許可される値: {QueryParser.VALID_HAND_TYPES}"  
-            )  
-          
         # 動作の検証（空文字列は許可しない）  
         if action_verb == "":  
             raise QueryValidationError(  
@@ -148,21 +138,6 @@ class QueryParser:
         # Stepクエリの場合は検証をスキップ  
         if query_text.startswith("Step:"):  
             return 'unspecified'
-        try:  
-            hand_type, _ = QueryParser.validate_and_parse_query(query_text)  
-            if hand_type == 'LeftHand':  
-                return 'left_hand'  
-            elif hand_type == 'RightHand':  
-                return 'right_hand'  
-            elif hand_type == 'BothHands':  
-                return 'both_hands'  
-            else:  # None  
-                return 'unspecified'  
-        except QueryValidationError:  
-            # 旧形式のフォールバック  
-            query_lower = query_text.lower()  
-            if 'left' in query_lower or '左' in query_lower:  
-                return 'left_hand'  
-            elif 'right' in query_lower or '右' in query_lower:  
-                return 'right_hand'  
-            return 'right_hand'  # デフォルト
+        hand_type, _ = QueryParser.validate_and_parse_query(query_text)  
+        
+        return hand_type

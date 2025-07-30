@@ -91,9 +91,6 @@ class MainApplicationWindow(QMainWindow):
             self.confidence_slider = ui_components['confidence_slider']  
             self.confidence_value_label = ui_components['confidence_value_label']  
         
-        if 'hand_type_combo' in ui_components:  
-            self.hand_type_combo = ui_components['hand_type_combo']  
-        
         # メインレイアウトを設定  
         self.setCentralWidget(main_splitter)  
 
@@ -117,9 +114,6 @@ class MainApplicationWindow(QMainWindow):
         # フィルタコントロールの接続  
         if hasattr(self, 'confidence_slider'):  
             self.confidence_slider.valueChanged.connect(self.update_confidence_filter)  
-          
-        if hasattr(self, 'hand_type_combo'):  
-            self.hand_type_combo.currentTextChanged.connect(self.update_hand_type_filter)  
           
         # EditWidgetManagerのシグナル接続  
         self.edit_widget_manager.intervalUpdated.connect(self.on_interval_updated)  
@@ -354,10 +348,6 @@ class MainApplicationWindow(QMainWindow):
         if hasattr(self, 'confidence_value_label'):  
             self.confidence_value_label.setText(f"{threshold:.2f}")  
         self.application_coordinator.set_confidence_threshold(threshold)
-      
-    def update_hand_type_filter(self, hand_type: str):  
-        """Hand Typeフィルタ更新"""  
-        self.application_coordinator.set_hand_type_filter(hand_type)  
       
     def seek_relative(self, seconds: float):  
         """現在位置から相対的にシーク"""  
