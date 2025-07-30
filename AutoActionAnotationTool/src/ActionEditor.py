@@ -356,79 +356,68 @@ class ActionEditor(QWidget):
         self.intervalDeleted.emit()  
         self.dataChanged.emit()  
   
-    def add_new_interval(self):    
-        """新しい区間を追加"""    
-        if (self._is_initializing or not self.current_query_result or     
-            not self.command_factory):    
-            return    
-            
-        # デフォルトの区間長    
-        default_duration = 5.0    
-            
-        # 現在選択されている区間がある場合は、その終了時刻の直後に配置    
-        if self.selected_interval:    
-            start_time = self.selected_interval.end_time    
-            end_time = start_time + default_duration    
-        else:    
-            # 選択されている区間がない場合は、既存の区間の最後の後に配置    
-            existing_intervals = self.current_query_result.relevant_windows    
-            if existing_intervals:    
-                # 最も遅い終了時刻を見つける    
-                latest_end = max(interval.end_time for interval in existing_intervals)    
-                start_time = latest_end    
-                end_time = start_time + default_duration    
-            else:    
-                # 区間が全くない場合は0秒から開始    
-                start_time = 0.0    
-                end_time = default_duration    
-            
-        # 動画の長さを超えないように調整    
-        video_duration = self._get_video_duration()    
-            
-        if end_time > video_duration:    
-            end_time = video_duration    
-            start_time = max(0, end_time - default_duration)    
-            
-        if start_time >= end_time:    
-            QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")    
-            return    
-            
-        # 選択されているIntervalのQueryResultsを優先的に使用  
-        source_query_result = None  
-        if self.selected_interval and hasattr(self.selected_interval, 'query_result'):  
-            source_query_result = self.selected_interval.query_result  
-        else:  
-            source_query_result = self.current_query_result          
+    def add_new_interval(self):      
+        """新しい区間を追加"""      
+        if (self._is_initializing or self.command_factory is None):
+            print("DEBUG: Early return due to missing conditions")
+            return      
+              
+        # デフォルトの区間長      
+        default_duration = 2.0
+        video_duration = self._get_video_duration()
 
-        # 独立したQueryResultsを作成  
-        import copy  
-        independent_query_result = copy.deepcopy(source_query_result)  
+        start_time = self.start_spinbox.value()
+        end_time = self.end_spinbox.value()
+
+        if start_time == end_time:
+            # 開始と終了が同じ場合はデフォルトの長さを設定
+            end_time = start_time + default_duration
         
-        # 新しい区間を作成    
-        new_interval = DetectionInterval(    
-            start_time, end_time, 1.0, 0  # indexは0にリセット  
-        )    
-        # relevant_windowsを空にする 
-        independent_query_result.relevant_windows = []
-        new_interval.query_result = independent_query_result    
-            
-        # 新しいQueryResultsをcurrent_query_resultsに追加  
-        self.main_window.application_coordinator.current_query_results.append(independent_query_result)
-
-        # STTDataControllerにアクションカテゴリを確実に追加  
-        stt_controller = self.main_window.application_coordinator.get_stt_data_controller()  
-        if stt_controller:  
-            # アクションカテゴリを強制的に作成  
-            stt_controller._get_or_create_action_category(independent_query_result.query_text)  
-            # データセット更新シグナルを発信  
-            stt_controller.datasetUpdated.emit()  
-
-        self.command_factory.create_and_execute_interval_add(    
-            independent_query_result, new_interval    
+        # 動画の長さを超えないように調整      
+        if end_time > video_duration:      
+            end_time = video_duration      
+            start_time = max(0, end_time - default_duration)
+              
+        if start_time >= end_time:      
+            QMessageBox.warning(None, "Warning", "Cannot add interval: insufficient space!")      
+            return
+              
+        # 現在のテキストボックスの値から新しいクエリを構築  
+        query_text = self._build_new_query_text()  
+          
+        # 新しいQueryResultsを作成  
+        new_query_result = QueryResults(  
+            query_text=query_text,  
+            video_id=self.main_window.application_coordinator.video_data_controller.get_video_name() or "",  
+            relevant_windows=[],  
+            saliency_scores=[],  
+            query_id=len(self.main_window.application_coordinator.current_query_results)  
         )  
-        # シグナル発信    
-        self.intervalAdded.emit()    
-        self.dataChanged.emit() 
+          
+        # 新しい区間を作成      
+        new_interval = DetectionInterval(      
+            start_time, end_time, 1.0, 0  # indexは0にリセット    
+        )      
+        new_interval.query_result = new_query_result      
+              
+        # 新しいQueryResultsをcurrent_query_resultsに追加    
+        self.main_window.application_coordinator.current_query_results.append(new_query_result)  
+      
+        # STTDataControllerにアクションカテゴリを確実に追加    
+        stt_controller = self.main_window.application_coordinator.get_stt_data_controller()    
+        if stt_controller:    
+            # アクションカテゴリを強制的に作成    
+            stt_controller._get_or_create_action_category(new_query_result.query_text)    
+            # データセット更新シグナルを発信    
+            stt_controller.datasetUpdated.emit()    
+      
+        self.command_factory.create_and_execute_interval_add(      
+            new_query_result, new_interval      
+        )    
+          
+        # シグナル発信      
+        self.intervalAdded.emit()      
+        self.dataChanged.emit()
       
     def _get_video_duration(self) -> float:  
         """動画の長さを取得"""  
