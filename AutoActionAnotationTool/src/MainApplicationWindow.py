@@ -28,6 +28,9 @@ class MainApplicationWindow(QMainWindow):
         # Undo/Redoスタックを初期化  
         self.undo_stack = QUndoStack(self)  
           
+        # UndoStackの変更を監視  
+        self.undo_stack.indexChanged.connect(self._debug_undo_stack_changed)
+          
         # コアコンポーネントを初期化  
         self.application_coordinator = ApplicationCoordinator(self)  
         self.timeline_display_manager = TimelineDisplayManager()  
@@ -399,6 +402,12 @@ class MainApplicationWindow(QMainWindow):
             'undo_stack_count': self.undo_stack.count(),  
             'undo_stack_index': self.undo_stack.index()  
         }  
+
+    def _debug_undo_stack_changed(self, index):  
+        """UndoStackの変更をログ出力"""  
+        print(f"DEBUG: UndoStack changed - index: {index}, count: {self.undo_stack.count()}")  
+        if self.undo_stack.count() > 0:  
+            print(f"DEBUG: Current command: {self.undo_stack.command(index-1).text() if index > 0 else 'None'}")
   
   
 def main():  

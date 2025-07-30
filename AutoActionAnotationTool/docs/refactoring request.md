@@ -24,7 +24,7 @@ AutoActionAnnotationToolのリファクタリングをしています。 古い�
 - [x] confidenceのフィルタでフィルタされた状態でstt dataをexportしたい
 - [ ] HandTypeでのFilter機能を無くす
 - [x] Intervalが消せないときがある.Timeline上でクリックした後じゃないと消せない。DetectionResults上で選択しただけでも消せるようにしたい。
-- [ ] Intervalのstart/endの変更・Intervalの移動のUndoができない。
+- [x] Intervalのstart/endの変更・Intervalの移動のUndoができない。
 - [ ] jsonロード時、queryの形式が"_"で区切られたものではなかった場合、文章全体を最初のテキストボックスに入れ、残りのテキストボックスは空になった状態にしたい。
 
 古い実装を正として、これらの点に関して古い実装の通りに動作するように修正してください。

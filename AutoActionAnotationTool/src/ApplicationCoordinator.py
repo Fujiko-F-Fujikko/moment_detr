@@ -40,8 +40,13 @@ class ApplicationCoordinator(QObject):
         self.current_video_path: Optional[str] = None  
         self.current_query_results: list = []  
 
-        # コマンドファクトリー
-        self.command_factory = EditCommandFactory(main_window) if main_window else None
+        # ドラッグ状態管理を追加  
+        self.drag_original_start = None  
+        self.drag_original_end = None  
+        self.dragging_interval = None  
+
+        # コマンドファクトリー  
+        self.command_factory = EditCommandFactory(main_window) if main_window else None  
           
         self.setup_connections()  
       
@@ -252,11 +257,10 @@ class ApplicationCoordinator(QObject):
 
     def handle_interval_drag_started(self, interval: DetectionInterval):  
         """区間ドラッグ開始時の処理"""  
-        # 元の値を保存（Undo用）  
-        if hasattr(self.main_window, 'drag_original_start'):  
-            self.main_window.drag_original_start = interval.start_time  
-            self.main_window.drag_original_end = interval.end_time  
-            self.main_window.dragging_interval = interval  
+        # ApplicationCoordinator内で状態管理  
+        self.drag_original_start = interval.start_time  
+        self.drag_original_end = interval.end_time  
+        self.dragging_interval = interval  
       
     def handle_interval_drag_moved(self, interval: DetectionInterval, new_start: float, new_end: float):  
         """区間ドラッグ移動時の処理"""  
@@ -280,14 +284,22 @@ class ApplicationCoordinator(QObject):
     def handle_interval_drag_finished(self, interval: DetectionInterval, new_start: float, new_end: float):  
         """区間ドラッグ完了時の処理"""  
         if self.main_window and hasattr(self.main_window, 'undo_stack') and self.command_factory:  
-            old_start = getattr(self.main_window, 'drag_original_start', interval.start_time)  
-            old_end = getattr(self.main_window, 'drag_original_end', interval.end_time)  
-            
-            # ステップかアクションかを判定してファクトリー経由でコマンドを作成  
-            if (hasattr(interval, 'query_result') and   
-                hasattr(interval.query_result, 'query_text') and   
-                interval.query_result.query_text.startswith("Step:")):  
-                
+            # ApplicationCoordinatorから直接取得  
+            old_start = self.drag_original_start if self.drag_original_start is not None else interval.start_time  
+            old_end = self.drag_original_end if self.drag_original_end is not None else interval.end_time  
+              
+            # 実際に変更があるかチェック  
+            if abs(old_start - new_start) < 0.001 and abs(old_end - new_end) < 0.001:  
+                print("DEBUG: No significant changes detected - skipping undo command")  
+                return  
+
+              
+            # ステップかアクションかを判定  
+            is_step = (hasattr(interval, 'query_result') and   
+                      hasattr(interval.query_result, 'query_text') and   
+                      interval.query_result.query_text.startswith("Step:"))  
+              
+            if is_step:  
                 self.command_factory.create_and_execute_step_modify(  
                     interval, old_start, old_end, new_start, new_end,  
                     self.stt_data_controller, self.video_data_controller.get_video_name()  
@@ -295,7 +307,14 @@ class ApplicationCoordinator(QObject):
             else:  
                 self.command_factory.create_and_execute_interval_modify(  
                     interval, old_start, old_end, new_start, new_end  
-                )
+                ) 
+        else:  
+            print("DEBUG: Command creation skipped - missing dependencies")
+        
+        # ドラッグ状態をクリア  
+        self.drag_original_start = None  
+        self.drag_original_end = None  
+        self.dragging_interval = None
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):    
         """新規区間作成時の処理"""    
