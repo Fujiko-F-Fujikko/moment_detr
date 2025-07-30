@@ -177,6 +177,7 @@ class STTDataController(QObject):
       
     def _get_or_create_action_category(self, query_text: str) -> int:  
         """アクションカテゴリを取得または作成"""  
+        print(f"DEBUG: _get_or_create_action_category called with query_text: {query_text}")
         # 既存のカテゴリを検索  
         for category in self.stt_dataset.action_categories:  
             if category.interaction == query_text:  
@@ -320,7 +321,26 @@ class STTDataController(QObject):
                       
         except QueryValidationError:  
             print(f"Failed to parse query: {query_result.query_text}")  
-            pass
+            # "_"で区切られていない場合、文章全体をaction_verbに設定  
+            action_data = ActionData(  
+                action_verb=query_result.query_text,  
+                manipulated_object=None,  
+                target_object=None,  
+                tool=None  
+            )  
+              
+            # デフォルトの手の種類を設定  
+            hand_category = "unspecified"  
+              
+            # アクションカテゴリを作成  
+            action_id = self._get_or_create_action_category(query_result.query_text)  
+              
+            # confidence閾値以上のintervalのみを処理  
+            for interval in query_result.relevant_windows:  
+                if interval.confidence_score >= self.confidence_threshold:  
+                    action_entry = self._create_action_entry(action_data, interval)  
+                    action_entry.id = action_id  
+                    video_data.actions[hand_category].append(action_entry)
 
     def _create_action_entry(self, action_data: ActionData, interval: DetectionInterval) -> ActionEntry:  
         """DetectionIntervalからActionEntryを作成"""  

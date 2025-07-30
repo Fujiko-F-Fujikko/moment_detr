@@ -228,8 +228,13 @@ class ActionEditor(QWidget):
             self.target_object_edit.setText(action_data.target_object or "")  
             self.tool_edit.setText(action_data.tool or "")  
         except:  
-            pass  
-      
+            # "_"で区切られていない場合、文章全体を最初のテキストボックスに設定  
+            self.action_verb_edit.setText(self.current_query_result.query_text)  
+            self.manipulated_object_edit.setText("")  
+            self.target_object_edit.setText("")  
+            self.tool_edit.setText("")  
+            self.hand_combo.setCurrentText("unspecified")  
+
     def _clear_ui_fields(self):  
         """UIフィールドをクリア"""  
         if self._is_initializing:  
