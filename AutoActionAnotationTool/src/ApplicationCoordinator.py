@@ -224,12 +224,6 @@ class ApplicationCoordinator(QObject):
     def handle_timeline_interval_clicked(self, interval: DetectionInterval, query_result: QueryResults):  
         """タイムライン区間クリック時の処理"""  
         if self.edit_widget_manager and query_result:  
-            # クエリのHandTypeを確認  
-            try:  
-                query_hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)  
-            except QueryValidationError:  
-                query_hand_type = "Unknown"  
-            
             self.edit_widget_manager.set_current_query_results(query_result)  
             
             if hasattr(query_result, 'relevant_windows'):  
