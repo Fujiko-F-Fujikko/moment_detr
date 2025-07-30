@@ -32,11 +32,6 @@ class ActionDetailModifyCommand(QUndoCommand):
             if results_controller:  
                 results_controller._apply_current_filters()  # フィルタ再適用  
             
-            # 重要：STTDataControllerにも変更を反映  
-            stt_controller = coordinator.get_stt_data_controller()  
-            if stt_controller:  
-                stt_controller.sync_from_results_data()  # この行を追加  
-
             # 完全なコンポーネント同期を実行  
             coordinator.synchronize_timeline_updates()
             coordinator.synchronize_components()  
