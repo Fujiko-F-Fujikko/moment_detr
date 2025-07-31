@@ -112,6 +112,7 @@ class TimelineInteractionHandler(QObject):
                 distance = abs(event.position().x() - self.new_interval_start_pos)  
                 if distance >= self.min_drag_distance:  # 5ピクセル以上のドラッグ
                     self.newIntervalCreated.emit(self.new_interval_start_time, self.new_interval_end_time, self.timeline_type)
+                    print(f"DEBUG: newIntervalCreated signal emitted - start: {self.new_interval_start_time}, end: {self.new_interval_end_time}, type: {self.timeline_type}")
             else:
               self.emptyAreaClicked.emit(self.new_interval_start_time)  # 空白領域クリックとして処理
 

@@ -83,35 +83,6 @@ class ResultsDataController(QObject):
         
         return filtered_results 
       
-    def group_results_by_hand_type(self, results: Optional[List[QueryResults]] = None) -> Dict[str, List[QueryResults]]:  
-        """結果をHand Type毎にグループ化"""  
-        if results is None:  
-            results = self.filtered_results  
-          
-        groups = {  
-            "LeftHand": [],  
-            "RightHand": [],  
-            "BothHands": [],  
-            "Other": []  
-        }  
-          
-        for result in results:  
-            # Stepクエリの場合  
-            if result.query_text.startswith("Step:"):  
-                groups["Other"].append(result)  
-                continue  
-              
-            try:  
-                hand_type, _ = QueryParser.validate_and_parse_query(result.query_text)  
-                if hand_type in groups:  
-                    groups[hand_type].append(result)  
-                else:  
-                    groups["Other"].append(result)  
-            except QueryValidationError:  
-                groups["Other"].append(result)  
-          
-        return groups  
-      
     def get_all_results(self) -> List[QueryResults]:  
         """全ての結果を取得"""  
         return self.all_results  

@@ -49,6 +49,8 @@ class ApplicationCoordinator(QObject):
         self.command_factory = EditCommandFactory(main_window) if main_window else None  
           
         self.setup_connections()  
+        # 初期状態でも手の種類別タイムラインを表示するため同期を実行  
+        self.synchronize_components()
       
     def setup_connections(self):  
         """シグナル・スロット接続の設定"""  
@@ -319,6 +321,7 @@ class ApplicationCoordinator(QObject):
     
     def handle_new_interval_created(self, start_time: float, end_time: float, timeline_type: str):      
         """新規区間作成時の処理"""      
+        print(f"New interval created: {start_time} - {end_time} ({timeline_type})")
         if timeline_type == "Steps":      
             # Step用の新規区間作成処理      
             video_name = self.video_data_controller.get_video_name()      
@@ -337,8 +340,10 @@ class ApplicationCoordinator(QObject):
         else:    
             # Action用の新規区間作成処理
             if self.command_factory:  
+                # コマンド実行前  
                 # timeline_typeを使ってクエリ文章を作成
                 query_text = f"{timeline_type}_None_None_None_None"  
+                print(f"DEBUG: Command factory available, creating query_text: {query_text}")  
                   
                 new_query_result = QueryResults(  
                     query_text=query_text,  
@@ -347,6 +352,8 @@ class ApplicationCoordinator(QObject):
                     saliency_scores=[],  
                     query_id=len(self.current_query_results)  
                 )  
+                # QueryResults作成後  
+                print(f"DEBUG: Created new_query_result with query_id: {len(self.current_query_results)}")  
                   
                 # 新しい区間を作成  
                 new_interval = DetectionInterval(start_time, end_time, 1.0, 0)  
@@ -354,11 +361,17 @@ class ApplicationCoordinator(QObject):
                   
                 # current_query_resultsに追加  
                 self.current_query_results.append(new_query_result)  
+                # current_query_results追加後  
+                print(f"DEBUG: Added to current_query_results, new count: {len(self.current_query_results)}")  
+                self.results_data_controller.add_result(new_query_result)
+                print(f"DEBUG: Added new_query_result to results_data_controller, total count: {len(self.results_data_controller.get_all_results())}")
                   
                 # コマンドを実行  
                 self.command_factory.create_and_execute_interval_add(  
                     new_query_result, new_interval  
                 )  
+            else:  
+                print("DEBUG: Command factory is None!")
       
                 # 新しいQueryResultsを作成後、STTDataControllerにも反映    
                 stt_controller = self.get_stt_data_controller()    

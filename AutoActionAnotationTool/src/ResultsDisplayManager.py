@@ -26,12 +26,9 @@ class ResultsDisplayManager(QObject):
     def set_ui_components(self, results_list: QListWidget):  
         """UI要素を設定"""  
         self.results_list = results_list  
-        if self.results_list:  
-            self.results_list.itemClicked.connect(self._on_item_clicked)  
-              
-            # 初期表示を更新（データが既に読み込まれている場合）  
-            if self.results_controller.is_results_loaded():  
-                self.update_display()  
+        self.results_list.itemClicked.connect(self._on_item_clicked)  
+        # 初期表示を更新（データが既に読み込まれている場合）  
+        self.update_display()  
       
     def update_display(self, results=None):  
         """表示を更新（古い実装仕様に合わせて修正）"""  
@@ -52,9 +49,6 @@ class ResultsDisplayManager(QObject):
         
         # 各手の種類ごとに表示  
         for hand_type, results in grouped_results.items():  
-            if not results:  
-                continue  
-            
             # ヘッダーアイテムを追加  
             header_item = QListWidgetItem(f"=== {hand_type} ===")  
             header_item.setBackground(QColor(230, 230, 230))  
@@ -107,6 +101,7 @@ class ResultsDisplayManager(QObject):
 
     def _group_results_by_hand_type(self, results: List[QueryResults]) -> dict:  
         """結果をhand type毎にグループ化（古い実装仕様）"""  
+        
         groups = {  
             "LeftHand": [],  
             "RightHand": [],  
@@ -114,6 +109,9 @@ class ResultsDisplayManager(QObject):
             "Other": []  
         }  
         
+        if results is None:
+            return groups
+
         for result in results:  
             # Stepクエリの場合は検証をスキップ  
             if result.query_text.startswith("Step:"):  

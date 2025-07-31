@@ -359,7 +359,7 @@ class ActionEditor(QWidget):
     def add_new_interval(self):      
         """新しい区間を追加"""      
         if (self._is_initializing or self.command_factory is None):
-            print("DEBUG: Early return due to missing conditions")
+            print(f"DEBUG: Early return - initializing: {self._is_initializing}, command_factory: {self.command_factory is not None}") 
             return      
               
         # デフォルトの区間長      
@@ -402,6 +402,12 @@ class ActionEditor(QWidget):
               
         # 新しいQueryResultsをcurrent_query_resultsに追加    
         self.main_window.application_coordinator.current_query_results.append(new_query_result)  
+        # current_query_results追加後  
+        print(f"DEBUG: current_query_results count after append: {len(self.main_window.application_coordinator.current_query_results)}") 
+        # ResultsDataControllerにも追加  
+        results_controller = self.main_window.application_coordinator.get_results_data_controller()  
+        results_controller.add_result(new_query_result)
+        print(f"DEBUG: Added new_query_result to results_data_controller, total count: {len(results_controller.get_all_results())}")
       
         # STTDataControllerにアクションカテゴリを確実に追加    
         stt_controller = self.main_window.application_coordinator.get_stt_data_controller()    
@@ -418,6 +424,9 @@ class ActionEditor(QWidget):
         # シグナル発信      
         self.intervalAdded.emit()      
         self.dataChanged.emit()
+
+        # 追加: Timeline同期  
+        self.main_window.application_coordinator.synchronize_components()
       
     def _get_video_duration(self) -> float:  
         """動画の長さを取得"""  

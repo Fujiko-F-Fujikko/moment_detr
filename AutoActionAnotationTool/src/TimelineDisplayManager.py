@@ -96,6 +96,8 @@ class TimelineDisplayManager(QWidget):
                          stt_data_manager=None, video_name: str = None):    
         """クエリ結果を設定してタイムラインを作成"""    
         # 現在の再生位置を保存    
+        print(f"DEBUG: TimelineDisplayManager.set_query_results called with {len(query_results_list)} results") 
+        
         current_playhead_position = getattr(self, 'current_playhead_position', 0.0)    
             
         # 既存のタイムラインをクリア    
@@ -111,10 +113,11 @@ class TimelineDisplayManager(QWidget):
         hand_type_groups = self._group_results_by_hand_type(query_results_list)    
             
         for hand_type, queries in hand_type_groups.items():    
-            if queries:  # クエリがある場合のみタイムラインを作成    
-                timeline_widget = self.create_hand_type_timeline(hand_type, queries)    
-                self.timeline_widgets.append(timeline_widget)    
-                self.layout.addWidget(timeline_widget)    
+            print(f"DEBUG: Processing {hand_type} with {len(queries)} queries")
+            timeline_widget = self.create_hand_type_timeline(hand_type, queries)    
+            print(f"DEBUG: Created timeline for {hand_type}")
+            self.timeline_widgets.append(timeline_widget)    
+            self.layout.addWidget(timeline_widget)    
             
         # 動画の長さが既に設定されている場合は、全タイムラインに適用    
         if self.video_duration > 0:    
@@ -298,14 +301,20 @@ class TimelineDisplayManager(QWidget):
         
     def _group_results_by_hand_type(self, query_results_list: List[QueryResults]) -> Dict[str, List[QueryResults]]:    
         """結果をHand Type毎にグループ化"""    
+        print(f"DEBUG: _group_results_by_hand_type called with {len(query_results_list)} results") 
+        
         hand_type_groups = {    
             'LeftHand': [],    
             'RightHand': [],    
             'BothHands': [],    
             'None': []    
         }    
-            
-        for query_result in query_results_list:    
+
+        if query_results_list is None:
+            return hand_type_groups
+
+        for query_result in query_results_list: 
+            print(f"DEBUG: Processing query_result: {query_result.query_text}")    
             try:    
                 hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)    
                 if hand_type in hand_type_groups:    
@@ -313,8 +322,9 @@ class TimelineDisplayManager(QWidget):
             except QueryValidationError:    
                 hand_type_groups['None'].append(query_result)    
             
-        return hand_type_groups    
-        
+        print(f"DEBUG: Final groups: {[(k, len(v)) for k, v in hand_type_groups.items()]}")  
+        return hand_type_groups
+
     def _get_step_intervals(self, stt_data_manager, video_name: str) -> List[DetectionInterval]:    
         """STTデータからステップ区間を取得"""    
         step_intervals = []    
@@ -445,6 +455,8 @@ class TimelineDisplayManager(QWidget):
       
     def update_timeline_data(self, timeline_type: str, data):  
         """特定のタイムラインのデータを更新"""  
+        print(f"DEBUG: update_timeline_data called for {timeline_type} with {len(data) if hasattr(data, '__len__') else 'unknown'} items")
+
         timeline = self.get_timeline_by_type(timeline_type)  
         if timeline:  
             timeline_widget = self._find_timeline_widget(timeline)  

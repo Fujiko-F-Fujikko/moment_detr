@@ -177,7 +177,6 @@ class STTDataController(QObject):
       
     def _get_or_create_action_category(self, query_text: str) -> int:  
         """アクションカテゴリを取得または作成"""  
-        print(f"DEBUG: _get_or_create_action_category called with query_text: {query_text}")
         # 既存のカテゴリを検索  
         for category in self.stt_dataset.action_categories:  
             if category.interaction == query_text:  
