@@ -199,26 +199,35 @@ class STTDataController(QObject):
             else:  
                 print(f"Category '{old_text}' is still in use, not removing")
       
-    def delete_step(self, video_name: str, step_index: int) -> bool:  
-        """ステップを削除"""  
-        if video_name not in self.stt_dataset.database:  
-            return False  
-          
-        try:  
-            video_data = self.stt_dataset.database[video_name]  
-            if step_index >= len(video_data.steps):  
-                return False  
+    def delete_step(self, video_name: str, step_index: int) -> bool:    
+        """ステップを削除"""    
+        if video_name not in self.stt_dataset.database:    
+            return False    
+            
+        try:    
+            video_data = self.stt_dataset.database[video_name]    
+            if step_index >= len(video_data.steps):    
+                return False    
+                
+            # 削除前にステップ情報を保存  
+            deleted_step = video_data.steps[step_index]  
+            deleted_step_text = deleted_step.step  
+            deleted_step_id = deleted_step.id  
               
-            video_data.steps.pop(step_index)  
+            # ステップを削除  
+            video_data.steps.pop(step_index)    
               
-            # シグナル発信  
-            self.stepDeleted.emit(video_name, step_index)  
-            self.datasetUpdated.emit()  
-              
-            return True  
-              
-        except Exception as e:  
-            raise Exception(f"Failed to delete step: {str(e)}")  
+            # 削除されたステップのカテゴリが他で使用されているかチェック  
+            self._cleanup_unused_step_category(deleted_step_text, deleted_step_id)  
+                
+            # シグナル発信    
+            self.stepDeleted.emit(video_name, step_index)    
+            self.datasetUpdated.emit()    
+                
+            return True    
+                
+        except Exception as e:    
+            raise Exception(f"Failed to delete step: {str(e)}")
       
     def _get_or_create_action_category(self, query_text: str) -> int:  
         """アクションカテゴリを取得または作成"""  
@@ -342,7 +351,9 @@ class STTDataController(QObject):
           
         # 各QueryResultsを処理  
         for query_result in results:  
-            self._process_query_result(video_data, query_result)
+            # Intervalが存在しない場合はスキップ
+            if len(query_result.relevant_windows) > 0:
+                self._process_query_result(video_data, query_result)
 
     def _process_query_result(self, video_data: VideoData, query_result: QueryResults):  
         """個別のQueryResultsを処理してActionEntryを作成（confidence閾値対応）"""  
@@ -400,3 +411,23 @@ class STTDataController(QObject):
             segment=[interval.start_time, interval.end_time],  
             segment_frames=[start_frame, end_frame]  
         )
+
+    def _cleanup_unused_step_category(self, step_text: str, category_id: int):  
+        """使用されていないステップカテゴリを削除する"""  
+        # 他のステップエントリで同じカテゴリが使用されているかチェック  
+        is_still_used = False  
+        for video_data in self.stt_dataset.database.values():  
+            for step_entry in video_data.steps:  
+                if step_entry.id == category_id:  
+                    is_still_used = True  
+                    break  
+            if is_still_used:  
+                break  
+          
+        # 他で使用されていない場合は、カテゴリを削除  
+        if not is_still_used:  
+            for i, category in enumerate(self.stt_dataset.step_categories):  
+                if category.id == category_id:  
+                    print(f"Removing unused step category ID {category_id} with text '{step_text}'")  
+                    self.stt_dataset.step_categories.pop(i)  
+                    break
