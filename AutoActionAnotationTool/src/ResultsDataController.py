@@ -155,7 +155,7 @@ class ResultsDataController(QObject):
             raise Exception(f"Failed to save results: {str(e)}")  
 
       
-    def save_results_with_data(self, results_data: List[QueryResults], file_path: str) -> bool:  
+    def save_results_with_data(self, results_data: List[QueryResults], video_path:str, file_path: str) -> bool:  
         """指定されたデータを保存（ActionとStepを分離）"""  
         try:  
             # ActionとStepを分離  
@@ -173,7 +173,7 @@ class ResultsDataController(QObject):
                 steps=step_results,      # Step専用フィールド  
                 timestamp=None,  
                 model_info={},  
-                video_path=None,  
+                video_path=video_path,  
                 total_queries=len(action_results)  
             )  
             self.inference_saver.save_to_json(inference_results, file_path)  

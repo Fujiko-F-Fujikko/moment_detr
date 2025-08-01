@@ -488,6 +488,7 @@ class ApplicationCoordinator(QObject):
         try:  
             # 既存のアクション結果を取得  
             all_results = self.results_data_controller.get_all_results().copy()  
+            video_path = self.video_data_controller.get_current_video_path()
               
             # Step用のQueryResultsを取得  
             video_name = self.video_data_controller.get_video_name()  
@@ -496,7 +497,7 @@ class ApplicationCoordinator(QObject):
                 all_results.extend(step_results)  
               
             # 統合結果を保存  
-            return self.results_data_controller.save_results_with_data(all_results, file_path)  
+            return self.results_data_controller.save_results_with_data(all_results, video_path, file_path)  
               
         except Exception as e:  
             raise Exception(f"Failed to save results with steps: {str(e)}")
