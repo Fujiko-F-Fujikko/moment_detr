@@ -10,8 +10,6 @@ from TimelineDisplayManager import TimelineDisplayManager
 from EditWidgetManager import EditWidgetManager  
 from Results import DetectionInterval, QueryResults
 from ResultsDisplayManager import ResultsDisplayManager
-from Utilities import show_call_stack  # デバッグ用スタックトレース表示
-from STTDataStructures import QueryParser, QueryValidationError
 from EditCommandFactory import EditCommandFactory
   
 class ApplicationCoordinator(QObject):  
@@ -38,7 +36,6 @@ class ApplicationCoordinator(QObject):
           
         # 状態管理  
         self.current_video_path: Optional[str] = None  
-        self.current_query_results: list = []  
 
         # ドラッグ状態管理を追加  
         self.drag_original_start = None  
@@ -195,8 +192,6 @@ class ApplicationCoordinator(QObject):
             if video_name:  
                 self.stt_data_controller.add_inference_results(video_name, results)  
             
-            self.current_query_results = results  
-            
             # シグナル発信（修正：結果を引数として渡す）  
             self.resultsLoaded.emit(results)  
             
@@ -213,7 +208,6 @@ class ApplicationCoordinator(QObject):
       
     def handle_results_loaded(self, results):  
         """結果読み込み完了時の処理"""  
-        self.current_query_results = results  
         self.synchronize_components()  
     
     def handle_results_filtered(self, filtered_results):  
@@ -338,19 +332,15 @@ class ApplicationCoordinator(QObject):
                     video_id=self.video_data_controller.get_video_name() or "",  
                     relevant_windows=[],  
                     saliency_scores=[],  
-                    query_id=len(self.current_query_results)  
+                    query_id=len(self.results_data_controller.get_all_results())  
                 )  
                 # QueryResults作成後  
-                print(f"DEBUG: Created new_query_result with query_id: {len(self.current_query_results)}")  
+                print(f"DEBUG: Created new_query_result with query_id: {len(self.results_data_controller.get_all_results())}")  
                   
                 # 新しい区間を作成  
                 new_interval = DetectionInterval(start_time, end_time, 1.0, 0)  
                 new_interval.query_result = new_query_result  
                   
-                # current_query_resultsに追加  
-                self.current_query_results.append(new_query_result)  
-                # current_query_results追加後  
-                print(f"DEBUG: Added to current_query_results, new count: {len(self.current_query_results)}")  
                 self.results_data_controller.add_result(new_query_result)
                 print(f"DEBUG: Added new_query_result to results_data_controller, total count: {len(self.results_data_controller.get_all_results())}")
                   
@@ -456,7 +446,6 @@ class ApplicationCoordinator(QObject):
 
     def synchronize_timeline_updates(self):  
         """タイムライン更新の同期"""  
-        #show_call_stack()
         if self.timeline_display_manager:  
             self.timeline_display_manager.update_all_timelines()  
       
@@ -502,7 +491,6 @@ class ApplicationCoordinator(QObject):
         """現在の状態を取得（デバッグ用）"""  
         return {  
             'current_video_path': self.current_video_path,  
-            'query_results_count': len(self.current_query_results),  
             'has_timeline_manager': self.timeline_display_manager is not None,  
             'has_edit_manager': self.edit_widget_manager is not None,  
             'has_video_controller': self.video_player_controller is not None,  

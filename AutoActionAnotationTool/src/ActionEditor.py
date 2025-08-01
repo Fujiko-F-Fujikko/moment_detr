@@ -386,12 +386,13 @@ class ActionEditor(QWidget):
         query_text = self._build_new_query_text()  
           
         # 新しいQueryResultsを作成  
+        results_controller = self.main_window.application_coordinator.get_results_data_controller()  
         new_query_result = QueryResults(  
             query_text=query_text,  
             video_id=self.main_window.application_coordinator.video_data_controller.get_video_name() or "",  
             relevant_windows=[],  
             saliency_scores=[],  
-            query_id=len(self.main_window.application_coordinator.current_query_results)  
+            query_id=len(results_controller.get_all_results())  
         )  
           
         # 新しい区間を作成      
@@ -400,12 +401,7 @@ class ActionEditor(QWidget):
         )      
         new_interval.query_result = new_query_result      
               
-        # 新しいQueryResultsをcurrent_query_resultsに追加    
-        self.main_window.application_coordinator.current_query_results.append(new_query_result)  
-        # current_query_results追加後  
-        print(f"DEBUG: current_query_results count after append: {len(self.main_window.application_coordinator.current_query_results)}") 
         # ResultsDataControllerにも追加  
-        results_controller = self.main_window.application_coordinator.get_results_data_controller()  
         results_controller.add_result(new_query_result)
         print(f"DEBUG: Added new_query_result to results_data_controller, total count: {len(results_controller.get_all_results())}")
       
