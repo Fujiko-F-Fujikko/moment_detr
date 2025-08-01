@@ -157,11 +157,13 @@ class ActionEditor(QWidget):
         if self._is_initializing:  
             return  
           
+        if len(interval.query_result.relevant_windows) == 0:  
+            print(f"DEBUG: No intervals in this query_result: {interval.query_result}")
+            return
+          
         self.selected_interval = interval  
         self.selected_interval_index = interval.query_result.relevant_windows.index(interval)  
-        # デバッグ情報を追加  
 
-        #show_call_stack()
         self.update_interval_ui()  
       
     def clear_selection(self):  
