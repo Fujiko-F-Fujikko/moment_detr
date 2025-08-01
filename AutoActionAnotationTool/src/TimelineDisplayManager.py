@@ -315,6 +315,11 @@ class TimelineDisplayManager(QWidget):
 
         for query_result in query_results_list: 
             print(f"DEBUG: Processing query_result: {query_result.query_text}")    
+
+            # is_stepフラグまたはクエリテキストでStepを識別して除外  
+            if (hasattr(query_result, 'is_step') and query_result.is_step) or query_result.query_text.startswith("Step:"):  
+                continue  # Stepクエリはスキップ  
+
             try:    
                 hand_type, _ = QueryParser.validate_and_parse_query(query_result.query_text)    
                 if hand_type in hand_type_groups:    
@@ -343,7 +348,8 @@ class TimelineDisplayManager(QWidget):
                     step_query_result = type('StepQueryResult', (), {    
                         'query_text': f"Step: {step.step}",
                         'video_id': video_name,    
-                        'relevant_windows': [interval]    
+                        'relevant_windows': [interval],
+                        'is_step': True,
                     })()    
                     interval.query_result = step_query_result    
                     step_intervals.append(interval)    

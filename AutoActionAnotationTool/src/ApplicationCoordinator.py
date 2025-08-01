@@ -1,6 +1,6 @@
 # ApplicationCoordinator.py  
 from PyQt6.QtCore import QObject, pyqtSignal  
-from typing import Optional, Dict, Any  
+from typing import Optional, Dict, Any, List
   
 from VideoPlayerController import VideoPlayerController
 from VideoDataController import VideoDataController  
@@ -183,23 +183,27 @@ class ApplicationCoordinator(QObject):
             print(f"Failed to load video: {e}")  
       
     def load_inference_results(self, json_path: str):  
-        """推論結果を読み込み"""  
+        """推論結果を読み込み（Step含む）"""  
         try:  
             results = self.results_data_controller.load_inference_results(json_path)  
-            
-            # STTデータに推論結果を追加  
+              
+            # Step用クエリを分離してSTTDataControllerに追加  
             video_name = self.video_data_controller.get_video_name()  
             if video_name:  
                 self.stt_data_controller.add_inference_results(video_name, results)  
             
-            # シグナル発信（修正：結果を引数として渡す）  
+                for query_result in results:  
+                    if (hasattr(query_result, 'is_step') and query_result.is_step) or query_result.query_text.startswith("Step:"):  
+                        step_text = query_result.query_text.replace("Step: ", "")  
+                        for interval in query_result.relevant_windows:  
+                            segment = [interval.start_time, interval.end_time]  
+                            self.stt_data_controller.add_step(video_name, step_text, segment)  
+              
             self.resultsLoaded.emit(results)  
-            
-            # コンポーネント同期  
             self.synchronize_components()  
-                        
+                          
         except Exception as e:  
-            print(f"Failed to load inference results: {e}")  
+            print(f"Failed to load inference results: {e}")
       
     def handle_video_loaded(self, video_info):  
         """動画読み込み完了時の処理"""  
@@ -405,26 +409,7 @@ class ApplicationCoordinator(QObject):
         """編集データ変更時の処理"""  
         self.synchronize_components()  
         self.dataChanged.emit()  
-      
-#    def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
-#        """ステップセグメント更新の処理"""  
-#        print(f"Updating segment for step '{step_text}' from {old_segment} to {new_segment}")
-#        video_name = self.video_data_controller.get_video_name()  
-#        if video_name and self.stt_data_controller:  
-#            # 該当するステップのインデックスを見つける  
-#            if video_name in self.stt_data_controller.stt_dataset.database:  
-#                video_data = self.stt_data_controller.stt_dataset.database[video_name]  
-#                for i, step in enumerate(video_data.steps):  
-#                    if step.step == step_text:  
-#                        # 既存のmodify_stepメソッドを使用してセグメントを更新  
-#                       self.stt_data_controller.modify_step(  
-#                           video_name, i, new_segment=new_segment  
-#                       )  
-#                       break  
-#
-#       # コンポーネント同期  
-#        self.synchronize_step_updates()
-
+        
     def handle_timeline_empty_area_clicked(self, time_position: float):  
         """タイムライン空白エリアクリック時の処理"""  
         print(f"Empty area clicked at time position: {time_position}")
@@ -497,3 +482,21 @@ class ApplicationCoordinator(QObject):
             'video_loaded': self.video_data_controller.is_video_loaded(),  
             'results_loaded': self.results_data_controller.is_results_loaded()  
         }
+
+    def save_results_with_steps(self, file_path: str) -> bool:  
+        """結果をStepデータと統合して保存"""  
+        try:  
+            # 既存のアクション結果を取得  
+            all_results = self.results_data_controller.get_all_results().copy()  
+              
+            # Step用のQueryResultsを取得  
+            video_name = self.video_data_controller.get_video_name()  
+            if video_name:  
+                step_results = self.stt_data_controller.get_step_query_results(video_name)  
+                all_results.extend(step_results)  
+              
+            # 統合結果を保存  
+            return self.results_data_controller.save_results_with_data(all_results, file_path)  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to save results with steps: {str(e)}")

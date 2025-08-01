@@ -12,31 +12,23 @@ class InferenceResultsLoader:
         with open(file_path, 'r') as f:    
             data = json.load(f)    
             
-        # 新しい形式の場合  
-        if 'results' in data and 'video_path' in data:  
-            results = []  
-            for i, item in enumerate(data['results']):  
-                query_result = QueryResults.from_moment_detr_json(item, i)  
-                results.append(query_result)  
-              
-            return InferenceResults(    
-                results=results,    
-                timestamp=datetime.now(),    
-                model_info={"source": str(file_path)},  
-                video_path=data.get('video_path'),  
-                total_queries=data.get('total_queries')  
-            )  
-          
-        # 従来の形式の場合（後方互換性）  
-        if isinstance(data, list):    
-            results = [QueryResults.from_moment_detr_json(item, i) for i, item in enumerate(data)]    
-        else:    
-            results = [QueryResults.from_moment_detr_json(data, 0)]    
-            
+        results = []  
+        steps = []  
+        for i, item in enumerate(data['results']):  
+            query_result = QueryResults.from_moment_detr_json(item, i)  
+            results.append(query_result)  
+        for i, item in enumerate(data.get('steps')):  
+            query_result = QueryResults.from_moment_detr_json(item, i)  
+            query_result.is_step = True
+            steps.append(query_result)
+
         return InferenceResults(    
             results=results,    
+            steps=steps,
             timestamp=datetime.now(),    
-            model_info={"source": str(file_path)}    
+            model_info={"source": str(file_path)},  
+            video_path=data.get('video_path'),  
+            total_queries=data.get('total_queries')  
         )  
 
 class InferenceResultsSaver:    
@@ -46,7 +38,8 @@ class InferenceResultsSaver:
             output_data = {  
                 "video_path": results.video_path or "",  
                 "total_queries": results.total_queries or len(results.results),  
-                "results": []  
+                "results": [],  
+                "steps": []  
             }  
               
             for result in results.results:    
@@ -61,4 +54,15 @@ class InferenceResultsSaver:
                 }    
                 output_data["results"].append(json_data)  
               
+            for step in results.steps:
+                json_data = {    
+                    'query': step.query_text,    
+                    'vid': step.video_id,    
+                    'pred_relevant_windows': [    
+                        [interval.start_time, interval.end_time, interval.confidence_score]    
+                        for interval in step.relevant_windows    
+                    ],    
+                    'pred_saliency_scores': step.saliency_scores    
+                }  
+                output_data["steps"].append(json_data)
             json.dump(output_data, f, indent=2)

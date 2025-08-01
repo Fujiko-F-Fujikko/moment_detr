@@ -1,5 +1,6 @@
 # IntervalEditCommand.py (修正版)  
 from PyQt6.QtGui import QUndoCommand  
+from Utilities import show_call_stack
   
 class IntervalEditCommand(QUndoCommand):  
     def __init__(self, interval, old_start, old_end, new_start, new_end, main_window, description="Modify Interval"):  
@@ -89,6 +90,7 @@ class IntervalAddCommand(QUndoCommand):
         self.main_window = main_window  
           
     def redo(self):  
+        show_call_stack()
         self.query_result.relevant_windows.append(self.interval)  
         self._update_ui()  
           

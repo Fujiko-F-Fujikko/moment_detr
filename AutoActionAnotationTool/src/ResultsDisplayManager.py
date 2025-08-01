@@ -113,9 +113,8 @@ class ResultsDisplayManager(QObject):
             return groups
 
         for result in results:  
-            # Stepクエリの場合は検証をスキップ  
-            if result.query_text.startswith("Step:"):  
-                groups["Other"].append(result)  
+            # Stepクエリの場合はスキップ  
+            if result.is_step or result.query_text.startswith("Step:"):  
                 continue  
             
             try:  

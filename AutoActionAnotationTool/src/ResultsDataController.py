@@ -22,24 +22,36 @@ class ResultsDataController(QObject):
         # データ処理コンポーネント  
         self.inference_loader = InferenceResultsLoader()  
         self.inference_saver = InferenceResultsSaver()  
-      
+
     def load_inference_results(self, json_path: str) -> List[QueryResults]:  
-        """推論結果を読み込み"""  
+        """推論結果を読み込み（Step含む）"""  
         try:  
             inference_results = self.inference_loader.load_from_json(json_path)  
-            self.all_results = inference_results.results  
+              
+            # ActionとStepを統合し、is_stepフラグを設定  
+            all_results = []  
+              
+            # Action結果を追加  
+            for result in inference_results.results:  
+                result.is_step = False  
+                all_results.append(result)  
+              
+            # Step結果を追加（is_step=Trueに設定）  
+            if hasattr(inference_results, 'steps') and inference_results.steps:  
+                for step_result in inference_results.steps:  
+                    step_result.is_step = True  
+                    all_results.append(step_result)  
+              
+            self.all_results = all_results  
             self.filtered_results = self.all_results.copy()  
               
-            # フィルタを適用  
             self._apply_current_filters()  
-              
-            # シグナル発信  
             self.resultsLoaded.emit(self.all_results)  
               
             return self.all_results  
               
         except Exception as e:  
-            raise Exception(f"Failed to load inference results: {str(e)}")  
+            raise Exception(f"Failed to load inference results: {str(e)}")
       
     def set_confidence_threshold(self, threshold: float):  
         """信頼度閾値を設定"""  
@@ -64,6 +76,11 @@ class ResultsDataController(QObject):
             if not hasattr(result, 'saliency_scores'):  
                 filtered_results.append(result)  
                 continue
+            if result.is_step:
+                # ステップクエリは信頼度フィルタを適用しない
+                filtered_results.append(result)
+                continue
+
             # 信頼度閾値を満たす区間のみを含む新しいQueryResultsを作成  
             filtered_intervals = [  
                 interval for interval in result.relevant_windows  
@@ -136,7 +153,35 @@ class ResultsDataController(QObject):
               
         except Exception as e:  
             raise Exception(f"Failed to save results: {str(e)}")  
+
       
+    def save_results_with_data(self, results_data: List[QueryResults], file_path: str) -> bool:  
+        """指定されたデータを保存（ActionとStepを分離）"""  
+        try:  
+            # ActionとStepを分離  
+            action_results = []  
+            step_results = []  
+              
+            for result in results_data:  
+                if result.query_text.startswith("Step:"):  
+                    step_results.append(result)  
+                else:  
+                    action_results.append(result)  
+              
+            inference_results = InferenceResults(  
+                results=action_results,  # Actionのみ  
+                steps=step_results,      # Step専用フィールド  
+                timestamp=None,  
+                model_info={},  
+                video_path=None,  
+                total_queries=len(action_results)  
+            )  
+            self.inference_saver.save_to_json(inference_results, file_path)  
+            return True  
+              
+        except Exception as e:  
+            raise Exception(f"Failed to save results: {str(e)}")
+
     def add_result(self, query_result: QueryResults) -> bool:  
         """新しい結果を追加"""  
         try:  

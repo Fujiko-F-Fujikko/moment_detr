@@ -10,6 +10,7 @@ class QueryResults:
     relevant_windows: List[DetectionInterval]    
     saliency_scores: List[float]    
     query_id: Optional[int] = None  # qidがない場合に対応  
+    is_step: bool = False  # ステップクエリかどうかのフラグ
         
     @classmethod
     def from_moment_detr_json(cls, json_data: dict, index: int = 0) -> 'QueryResults':      
@@ -34,6 +35,7 @@ class QueryResults:
 @dataclass    
 class InferenceResults:    
     results: List[QueryResults]    
+    steps: List[QueryResults]  # ステップクエリのリスト
     timestamp: datetime    
     model_info: dict  
     video_path: Optional[str] = None  

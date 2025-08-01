@@ -270,10 +270,6 @@ class StepEditor(QWidget):
                 self.current_video_name, index, new_text, new_segment
             )
           
-        #if segment_changed:  
-        #    # ApplicationCoordinator経由でセグメント変更を適用  
-        #    self._apply_segment_changes(old_segment, new_segment, old_text)  
-          
         # UIを即座に更新  
         self.refresh_step_list()  
         
@@ -284,17 +280,6 @@ class StepEditor(QWidget):
         # 最後に選択状態を更新
         self.select_step(step_text=new_text if text_changed else old_text, step_index=index)
       
-#    def _apply_segment_changes(self, old_segment: list, new_segment: list, step_text: str):  
-#        """セグメント変更をタイムラインに適用"""  
-#        print(f"Applying segment changes for step '{step_text}' from {old_segment} to {new_segment}")
-#        if self.main_window is None or not hasattr(self.main_window, 'application_coordinator'):  
-#            print("Early return from _apply_segment_changes due to missing data")
-#            return  
-#          
-#        # ApplicationCoordinator経由でステップセグメント更新を処理  
-#        coordinator = self.main_window.application_coordinator  
-#        coordinator.handle_step_segment_update(step_text, old_segment, new_segment)
-
     def _update_step_edit_ui(self):  
         """Step編集UIの現在選択項目を更新"""  
         current_item = self.step_list.currentItem()  

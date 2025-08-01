@@ -431,3 +431,54 @@ class STTDataController(QObject):
                     print(f"Removing unused step category ID {category_id} with text '{step_text}'")  
                     self.stt_dataset.step_categories.pop(i)  
                     break
+
+    def get_step_query_results(self, video_name: str) -> List[QueryResults]:  
+        """StepデータをQueryResults形式で取得"""  
+        if video_name not in self.stt_dataset.database:  
+            return []  
+          
+        video_data = self.stt_dataset.database[video_name]  
+        step_query_results = []  
+          
+        for step in video_data.steps:  
+            interval = DetectionInterval(  
+                start_time=step.segment[0],  
+                end_time=step.segment[1],  
+                confidence_score=1.0,  
+                label=step.step  
+            )  
+              
+            query_result = QueryResults(  
+                query_text=f"Step: {step.step}",  
+                video_id=video_name,  
+                relevant_windows=[interval],  
+                saliency_scores=[1.0],  
+                query_id=step.id,  
+                is_step=True  
+            )  
+              
+            interval.query_result = query_result  
+            step_query_results.append(query_result)  
+          
+        return step_query_results
+
+    def process_loaded_results(self, video_name: str, inference_results: List[QueryResults]) -> List[str]:  
+        """ロードされた結果を処理（Step含む）"""  
+        invalid_queries = []  
+          
+        for query_result in inference_results:  
+            if query_result.query_text.startswith("Step:"):  
+                # Step用の処理  
+                step_text = query_result.query_text.replace("Step: ", "")  
+                for interval in query_result.relevant_windows:  
+                    segment = [interval.start_time, interval.end_time]  
+                    self.add_step(video_name, step_text, segment)  
+            else:  
+                # 既存のアクション処理  
+                try:  
+                    # 既存のロジック  
+                    pass  
+                except QueryValidationError as e:  
+                    invalid_queries.append((query_result.query_text, str(e)))  
+          
+        return invalid_queries

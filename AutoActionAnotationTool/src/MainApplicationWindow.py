@@ -232,7 +232,7 @@ class MainApplicationWindow(QMainWindow):
             actual_query_result = selected_interval.query_result if hasattr(selected_interval, 'query_result') else query_result  
               
             self.application_coordinator.edit_widget_manager.set_current_query_results(actual_query_result)  
-            self.application_coordinator.edit_widget_manager.set_selected_interval(selected_interval, selected_index)  
+            self.application_coordinator.edit_widget_manager.set_selected_interval(selected_interval)  
             
             # Timeline上でハイライト  
             if self.application_coordinator.timeline_display_manager:  
@@ -300,7 +300,10 @@ class MainApplicationWindow(QMainWindow):
         file_path = self.file_manager.save_results_dialog(self, default_filename)  
         if file_path:  
             try:  
-                results_controller.save_results(file_path)  
+                # ApplicationCoordinatorの統合保存機能を使用  
+                success = self.application_coordinator.save_results_with_steps(file_path)
+                if not success:  
+                    self.file_manager.show_save_error_message("Failed to save results with steps", self)  
             except Exception as e:  
                 self.file_manager.show_save_error_message(str(e), self)  
       
