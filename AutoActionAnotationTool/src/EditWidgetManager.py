@@ -65,9 +65,9 @@ class EditWidgetManager(QWidget):
         self.step_editor.stepDeleted.connect(self.stepDeleted)  
         self.step_editor.dataChanged.connect(self.dataChanged)  
       
-    def set_stt_data_manager(self, manager):  
+    def set_stt_data_manager(self, controller):  
         """STTDataManagerを設定"""  
-        self.step_editor.set_stt_data_manager(manager)  
+        self.step_editor.set_stt_data_controller(controller)  
       
     def set_current_video(self, video_name: str):  
         """現在の動画を設定"""  
@@ -89,10 +89,10 @@ class EditWidgetManager(QWidget):
         else:  
             self.tab_widget.setCurrentIndex(0)  # Action Edit tab  
       
-    def set_selected_interval(self, interval: DetectionInterval, index: int):  
+    def set_selected_interval(self, interval: DetectionInterval):  
         """選択された区間を設定"""  
         # ActionEditorに設定  
-        self.action_editor.set_selected_interval(interval, index)  
+        self.action_editor.set_selected_interval(interval)  
         
         # StepEditorにも情報を渡す（Step区間の場合）  
         if hasattr(interval, 'query_result') and interval.query_result:  

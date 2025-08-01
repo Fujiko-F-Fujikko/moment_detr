@@ -231,20 +231,9 @@ class ApplicationCoordinator(QObject):
       
     def handle_timeline_interval_clicked(self, interval: DetectionInterval, query_result: QueryResults):  
         """タイムライン区間クリック時の処理"""  
-        if self.edit_widget_manager and query_result:  
-            self.edit_widget_manager.set_current_query_results(query_result)  
+        self.edit_widget_manager.set_current_query_results(query_result)  
+        self.edit_widget_manager.set_selected_interval(interval)  
             
-            if hasattr(query_result, 'relevant_windows'):  
-                index = -1  
-                for i, window in enumerate(query_result.relevant_windows):  
-                    if window == interval:
-                        index = i  
-                        break  
-                
-                if index >= 0:  
-                    self.edit_widget_manager.set_selected_interval(interval, index)  
-                else:  
-                    return
 
         # Detection Results一覧で対応する項目を選択  
         if hasattr(self, 'results_display_manager') and self.results_display_manager:  
@@ -271,8 +260,7 @@ class ApplicationCoordinator(QObject):
         if self.edit_widget_manager and hasattr(interval, 'query_result'):  
             self.edit_widget_manager.set_current_query_results(interval.query_result)  
             try:  
-                index = interval.query_result.relevant_windows.index(interval)  
-                self.edit_widget_manager.set_selected_interval(interval, index)  
+                self.edit_widget_manager.set_selected_interval(interval)  
 
                 # Step区間の場合は追加でリアルタイム更新  
                 if (hasattr(interval.query_result, 'query_text') and   
@@ -428,23 +416,24 @@ class ApplicationCoordinator(QObject):
         self.synchronize_components()  
         self.dataChanged.emit()  
       
-    def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
-        """ステップセグメント更新の処理"""  
-        video_name = self.video_data_controller.get_video_name()  
-        if video_name and self.stt_data_controller:  
-            # 該当するステップのインデックスを見つける  
-            if video_name in self.stt_data_controller.stt_dataset.database:  
-                video_data = self.stt_data_controller.stt_dataset.database[video_name]  
-                for i, step in enumerate(video_data.steps):  
-                    if step.step == step_text:  
-                        # 既存のmodify_stepメソッドを使用してセグメントを更新  
-                        self.stt_data_controller.modify_step(  
-                            video_name, i, new_segment=new_segment  
-                        )  
-                        break  
-        
-        # コンポーネント同期  
-        self.synchronize_step_updates()
+#    def handle_step_segment_update(self, step_text: str, old_segment: list, new_segment: list):  
+#        """ステップセグメント更新の処理"""  
+#        print(f"Updating segment for step '{step_text}' from {old_segment} to {new_segment}")
+#        video_name = self.video_data_controller.get_video_name()  
+#        if video_name and self.stt_data_controller:  
+#            # 該当するステップのインデックスを見つける  
+#            if video_name in self.stt_data_controller.stt_dataset.database:  
+#                video_data = self.stt_data_controller.stt_dataset.database[video_name]  
+#                for i, step in enumerate(video_data.steps):  
+#                    if step.step == step_text:  
+#                        # 既存のmodify_stepメソッドを使用してセグメントを更新  
+#                       self.stt_data_controller.modify_step(  
+#                           video_name, i, new_segment=new_segment  
+#                       )  
+#                       break  
+#
+#       # コンポーネント同期  
+#        self.synchronize_step_updates()
 
     def handle_timeline_empty_area_clicked(self, time_position: float):  
         """タイムライン空白エリアクリック時の処理"""  

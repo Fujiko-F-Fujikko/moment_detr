@@ -17,7 +17,7 @@ class STTDataController(QObject):
     # シグナル定義  
     datasetUpdated = pyqtSignal()  
     stepAdded = pyqtSignal(str, str)  # video_name, step_text  
-    stepModified = pyqtSignal(str, int, str)  # video_name, step_index, new_text  
+    stepModified = pyqtSignal(str, int, str, float, float)  # video_name, step_index, new_text, new_segment_start, new_segment_end  
     stepDeleted = pyqtSignal(str, int)  # video_name, step_index  
     actionAdded = pyqtSignal(str, str)  # video_name, action_text  
     exportCompleted = pyqtSignal(str)  # file_path  
@@ -123,36 +123,81 @@ class STTDataController(QObject):
       
     def modify_step(self, video_name: str, step_index: int, new_text: str = None, new_segment: List[float] = None) -> bool:  
         """ステップを修正"""  
+        print(f"Modifying step for video '{video_name}' at index {step_index} with new_text='{new_text}' and new_segment={new_segment}")
         if video_name not in self.stt_dataset.database:  
+            print(f"Video '{video_name}' not found in dataset")
             return False  
-          
+            
         try:  
             video_data = self.stt_dataset.database[video_name]  
             if step_index >= len(video_data.steps):  
                 return False  
-              
+                
             step = video_data.steps[step_index]  
-              
+            old_step_text = step.step  # 古いテキストを保存  
+                
             # テキスト変更  
             if new_text is not None:  
+                old_step_text = step.step  
                 step.step = new_text  
-                step.id = self._get_or_create_step_category(new_text)  
-              
+                  
+                # 新しいカテゴリIDを取得（既存があれば再利用）  
+                new_category_id = self._get_or_create_step_category(new_text)  
+                step.id = new_category_id  
+                  
+                # 古いカテゴリの処理（削除または保持）  
+                self._update_step_category(old_step_text, new_text)
+                
             # セグメント変更  
             if new_segment is not None:  
                 step.segment = new_segment  
                 fps = video_data.fps  
                 step.segment_frames = [int(new_segment[0] * fps), int(new_segment[1] * fps)]  
-              
-            # シグナル発信  
-            if new_text is not None:  
-                self.stepModified.emit(video_name, step_index, new_text)  
+                
+            # シグナル発信    
+            if new_text is not None:    
+                # テキスト変更の場合は現在のセグメント情報を使用  
+                current_segment = step.segment  
+                self.stepModified.emit(video_name, step_index, new_text, current_segment[0], current_segment[1])  
+            elif new_segment is not None:  
+                # セグメント変更の場合  
+                self.stepModified.emit(video_name, step_index, step.step, new_segment[0], new_segment[1])
+
             self.datasetUpdated.emit()  
-              
+                
             return True  
-              
+                
         except Exception as e:  
             raise Exception(f"Failed to modify step: {str(e)}")  
+      
+    def _update_step_category(self, old_text: str, new_text: str):  
+        """ステップカテゴリを更新または削除する"""  
+        print(f"Updating step category from '{old_text}' to '{new_text}'")  
+          
+        # 古いテキストに対応するカテゴリを検索  
+        old_category = None  
+        for category in self.stt_dataset.step_categories:  
+            if category.step == old_text:  
+                old_category = category  
+                break  
+          
+        if old_category:  
+            # 他のステップエントリで同じ古いテキストが使用されているかチェック  
+            is_still_used = False  
+            for video_data in self.stt_dataset.database.values():  
+                for step_entry in video_data.steps:  
+                    if step_entry.step == old_text and step_entry.id == old_category.id:  
+                        is_still_used = True  
+                        break  
+                if is_still_used:  
+                    break  
+              
+            # 他で使用されていない場合は、古いカテゴリを削除  
+            if not is_still_used:  
+                print(f"Removing unused category ID {old_category.id} with text '{old_text}'")  
+                self.stt_dataset.step_categories.remove(old_category)  
+            else:  
+                print(f"Category '{old_text}' is still in use, not removing")
       
     def delete_step(self, video_name: str, step_index: int) -> bool:  
         """ステップを削除"""  

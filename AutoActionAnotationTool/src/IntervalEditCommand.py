@@ -24,11 +24,25 @@ class IntervalEditCommand(QUndoCommand):
     def _update_ui(self):  
         if self.main_window:  
             self.main_window.update_display()  
-  
-        # 新しいアーキテクチャではEditWidgetManagerを使用  
-        if hasattr(self.main_window, 'edit_widget_manager'):  
-            # 全体のUIを更新  
-            self.main_window.edit_widget_manager.refresh_ui()  
+            
+            # ApplicationCoordinatorを通じて完全な同期を実行  
+            if hasattr(self.main_window, 'application_coordinator'):  
+                coordinator = self.main_window.application_coordinator  
+                coordinator.synchronize_components()  
+
+            # ResultsDataControllerの再フィルタリングを強制実行  
+            results_controller = coordinator.get_results_data_controller()  
+            if results_controller:  
+                results_controller._apply_current_filters()  # フィルタ再適用
+
+            # EditWidgetManagerの更新  
+            if hasattr(self.main_window, 'edit_widget_manager'):  
+                self.main_window.edit_widget_manager.refresh_ui()  
+
+            # 新しく追加されたIntervalを選択状態にする  
+            if hasattr(self.main_window, 'application_coordinator'):  
+                coordinator = self.main_window.application_coordinator  
+                coordinator.handle_timeline_interval_clicked(self.interval, self.interval.query_result)
   
 class IntervalDeleteCommand(QUndoCommand):  
     def __init__(self, query_result, interval, index, main_window, description="Delete Interval"):  
@@ -101,7 +115,7 @@ class IntervalAddCommand(QUndoCommand):
             if hasattr(self.main_window, 'edit_widget_manager'):  
                 self.main_window.edit_widget_manager.refresh_ui()  
 
-                # 新しく追加されたIntervalを選択状態にする  
-                if self.interval in self.query_result.relevant_windows:  
-                    index = self.query_result.relevant_windows.index(self.interval)  
-                    self.main_window.edit_widget_manager.set_selected_interval(self.interval, index)
+            # 新しく追加されたIntervalを選択状態にする  
+            if hasattr(self.main_window, 'application_coordinator'):  
+                coordinator = self.main_window.application_coordinator  
+                coordinator.handle_timeline_interval_clicked(self.interval, self.query_result)

@@ -46,11 +46,10 @@ class ActionDetailModifyCommand(QUndoCommand):
             
             # 現在の選択状態を保存  
             current_interval = action_editor.selected_interval  
-            current_index = action_editor.selected_interval_index  
             
             # クエリ結果を再設定  
             self.main_window.edit_widget_manager.set_current_query_results(self.query_result)  
             
             # 選択状態を復元  
             if current_interval:  
-                action_editor.set_selected_interval(current_interval, current_index)
+                action_editor.set_selected_interval(current_interval)

@@ -22,7 +22,7 @@ class StepEditor(QWidget):
         super().__init__()  
         self.main_window = main_window  
         self.command_factory = EditCommandFactory(main_window) if main_window else None  
-        self.stt_data_manager = None  
+        self.stt_data_controller = None  
         self.current_video_name: Optional[str] = None  
         self.current_query_result: Optional[QueryResults] = None
           
@@ -133,9 +133,9 @@ class StepEditor(QWidget):
         self.step_start_spin.valueChanged.connect(self.on_step_value_changed)  
         self.step_end_spin.valueChanged.connect(self.on_step_value_changed)  
       
-    def set_stt_data_manager(self, manager):  
+    def set_stt_data_controller(self, manager):  
         """STTDataManagerを設定"""  
-        self.stt_data_manager = manager  
+        self.stt_data_controller = manager  
       
     def set_current_video(self, video_name: str):  
         """現在の動画を設定"""  
@@ -145,11 +145,12 @@ class StepEditor(QWidget):
     def refresh_step_list(self):  
         """ステップリストを更新"""  
         self.step_list.clear()  
-        if not self.stt_data_manager or not self.current_video_name:  
+        if self.stt_data_controller is None or self.current_video_name is None:  
+            print("Early return from refresh_step_list due to missing data")
             return  
           
-        if self.current_video_name in self.stt_data_manager.stt_dataset.database:  
-            video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
+        if self.current_video_name in self.stt_data_controller.stt_dataset.database:  
+            video_data = self.stt_data_controller.stt_dataset.database[self.current_video_name]  
             for i, step in enumerate(video_data.steps):  
                 item = QListWidgetItem(step.step)  
                 item.setData(1, i)  
@@ -165,7 +166,7 @@ class StepEditor(QWidget):
         try:  
             # 既存のUI更新処理  
             index = item.data(1)  
-            video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
+            video_data = self.stt_data_controller.stt_dataset.database[self.current_video_name]  
             step = video_data.steps[index]  
               
             self.step_edit_text.setText(step.step)  
@@ -198,13 +199,14 @@ class StepEditor(QWidget):
     def add_step(self):  
         """ステップを追加"""  
         step_text = self.step_text_edit.text().strip()  
-        if not step_text or not self.stt_data_manager or not self.current_video_name or not self.command_factory:  
+        if step_text is None or self.stt_data_controller is None or self.current_video_name is None or self.command_factory is None:
+            print("Early return from add_step due to missing data")
             return  
           
         segment = [0.0, 1.0]  
           
         success = self.command_factory.create_and_execute_step_add(  
-            self.stt_data_manager, self.current_video_name, step_text, segment  
+            self.stt_data_controller, self.current_video_name, step_text, segment  
         )  
           
         if success:  
@@ -227,13 +229,17 @@ class StepEditor(QWidget):
         self._step_timer.start(500)  # 500ms後に適用  
       
     def apply_step_changes(self):  
-        """ステップ変更を適用"""  
+        """ステップ変更を適用"""
+        print("Applying step changes...")
         current_item = self.step_list.currentItem()  
-        if not current_item or not self.stt_data_manager or not self.current_video_name or not self.command_factory:  
+
+        if current_item is None or self.stt_data_controller is None or self.current_video_name is None or self.command_factory is None:  
+            print("Early return from apply_step_changes due to missing data")
+            print(f"Current item: {current_item}, STT Data Manager: {self.stt_data_controller}, Current Video Name: {self.current_video_name}, Command Factory: {self.command_factory}")
             return  
           
         index = current_item.data(1)  
-        video_data = self.stt_data_manager.stt_dataset.database[self.current_video_name]  
+        video_data = self.stt_data_controller.stt_dataset.database[self.current_video_name]  
         step = video_data.steps[index]  
           
         old_text = step.step  
@@ -242,23 +248,31 @@ class StepEditor(QWidget):
         new_segment = [self.step_start_spin.value(), self.step_end_spin.value()]  
           
         # 実際に変更があるかチェック  
+        print(f"Old text: '{old_text}', New text: '{new_text}'")
+        print(f"Old segment: {old_segment}, New segment: {new_segment}")
         text_changed = (old_text != new_text)  
         segment_changed = (abs(old_segment[0] - new_segment[0]) > 0.01 or   
                           abs(old_segment[1] - new_segment[1]) > 0.01)  
           
         # 変更がない場合は何もしない  
         if not text_changed and not segment_changed:  
+            print("Early return due to no changes detected in apply_step_changes")
             return  
           
         # ファクトリーを使用してコマンドを作成・実行  
         if text_changed:  
             self.command_factory.create_and_execute_step_text_modify(  
-                self.stt_data_manager, self.current_video_name, index, old_text, new_text  
+                self.stt_data_controller, self.current_video_name, index, old_text, new_text  
             )  
+            
+        if text_changed or segment_changed:
+            self.stt_data_controller.modify_step(
+                self.current_video_name, index, new_text, new_segment
+            )
           
-        if segment_changed:  
-            # ApplicationCoordinator経由でセグメント変更を適用  
-            self._apply_segment_changes(old_segment, new_segment, old_text)  
+        #if segment_changed:  
+        #    # ApplicationCoordinator経由でセグメント変更を適用  
+        #    self._apply_segment_changes(old_segment, new_segment, old_text)  
           
         # UIを即座に更新  
         self.refresh_step_list()  
@@ -270,22 +284,24 @@ class StepEditor(QWidget):
         # 最後に選択状態を更新
         self.select_step(step_text=new_text if text_changed else old_text, step_index=index)
       
-    def _apply_segment_changes(self, old_segment: list, new_segment: list, step_text: str):  
-        """セグメント変更をタイムラインに適用"""  
-        if not self.main_window or not hasattr(self.main_window, 'application_coordinator'):  
-            return  
-          
-        # ApplicationCoordinator経由でステップセグメント更新を処理  
-        coordinator = self.main_window.application_coordinator  
-        coordinator.handle_step_segment_update(step_text, old_segment, new_segment)
+#    def _apply_segment_changes(self, old_segment: list, new_segment: list, step_text: str):  
+#        """セグメント変更をタイムラインに適用"""  
+#        print(f"Applying segment changes for step '{step_text}' from {old_segment} to {new_segment}")
+#        if self.main_window is None or not hasattr(self.main_window, 'application_coordinator'):  
+#            print("Early return from _apply_segment_changes due to missing data")
+#            return  
+#          
+#        # ApplicationCoordinator経由でステップセグメント更新を処理  
+#        coordinator = self.main_window.application_coordinator  
+#        coordinator.handle_step_segment_update(step_text, old_segment, new_segment)
 
     def _update_step_edit_ui(self):  
         """Step編集UIの現在選択項目を更新"""  
         current_item = self.step_list.currentItem()  
-        if current_item and self.stt_data_manager and self.current_video_name:  
+        if current_item and self.stt_data_controller and self.current_video_name:  
             index = current_item.data(1)  
-            if index < len(self.stt_data_manager.stt_dataset.database[self.current_video_name].steps):  
-                step = self.stt_data_manager.stt_dataset.database[self.current_video_name].steps[index]  
+            if index < len(self.stt_data_controller.stt_dataset.database[self.current_video_name].steps):  
+                step = self.stt_data_controller.stt_dataset.database[self.current_video_name].steps[index]  
                 
                 # シグナルを一時的に無効化  
                 self._block_signals(True)  
@@ -301,13 +317,14 @@ class StepEditor(QWidget):
     def delete_step(self):  
         """ステップを削除"""  
         current_item = self.step_list.currentItem()  
-        if not current_item or not self.stt_data_manager or not self.current_video_name or not self.command_factory:  
+        if current_item is None or self.stt_data_controller is None or self.current_video_name is None or self.command_factory is None:  
+            print("Early return from delete_step due to missing data")
             return  
           
         index = current_item.data(1)  
           
         self.command_factory.create_and_execute_step_delete(  
-            self.stt_data_manager, self.current_video_name, index  
+            self.stt_data_controller, self.current_video_name, index  
         )  
           
         # シグナル発信  
@@ -358,7 +375,7 @@ class StepEditor(QWidget):
         """現在の編集状態を取得（デバッグ用）"""  
         current_item = self.step_list.currentItem() if self.step_list else None  
         return {  
-            'has_stt_data_manager': self.stt_data_manager is not None,  
+            'has_stt_data_controller': self.stt_data_controller is not None,  
             'current_video_name': self.current_video_name,  
             'step_count': self.step_list.count() if self.step_list else 0,  
             'selected_step': current_item.text() if current_item else None  

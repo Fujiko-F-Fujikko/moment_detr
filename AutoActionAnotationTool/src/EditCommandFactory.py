@@ -50,38 +50,38 @@ class EditCommandFactory:
     def create_step_modify_command(self, interval: DetectionInterval,  
                                  old_start: float, old_end: float,  
                                  new_start: float, new_end: float,  
-                                 stt_data_manager, video_name: str,  
+                                 stt_data_controller, video_name: str,  
                                  description: str = "Modify Step") -> StepEditCommand:  
         """ステップ時間変更コマンドを作成"""  
         return StepEditCommand(  
             interval, old_start, old_end, new_start, new_end,  
-            stt_data_manager, video_name, self.main_window, description  
+            stt_data_controller, video_name, self.main_window, description  
         )  
       
-    def create_step_add_command(self, stt_data_manager, video_name: str,  
+    def create_step_add_command(self, stt_data_controller, video_name: str,  
                               step_text: str, segment: list,  
                               description: str = "Add Step") -> StepAddCommand:  
         """ステップ追加コマンドを作成"""  
         return StepAddCommand(  
-            stt_data_manager, video_name, step_text, segment,  
+            stt_data_controller, video_name, step_text, segment,  
             self.main_window, description  
         )  
       
-    def create_step_delete_command(self, stt_data_manager, video_name: str,  
+    def create_step_delete_command(self, stt_data_controller, video_name: str,  
                                  step_index: int,  
                                  description: str = "Delete Step") -> StepDeleteCommand:  
         """ステップ削除コマンドを作成"""  
         return StepDeleteCommand(  
-            stt_data_manager, video_name, step_index,  
+            stt_data_controller, video_name, step_index,  
             self.main_window, description  
         )  
       
-    def create_step_text_modify_command(self, stt_data_manager, video_name: str,  
+    def create_step_text_modify_command(self, stt_data_controller, video_name: str,  
                                       step_index: int, old_text: str, new_text: str,  
                                       description: str = "Modify Step Text") -> StepTextEditCommand:  
         """ステップテキスト変更コマンドを作成"""  
         return StepTextEditCommand(  
-            stt_data_manager, video_name, step_index, old_text, new_text,  
+            stt_data_controller, video_name, step_index, old_text, new_text,  
             self.main_window, description  
         )  
       
@@ -122,12 +122,12 @@ class EditCommandFactory:
             print(f"Failed to execute action modify command: {e}")  
             return False  
       
-    def create_and_execute_step_add(self, stt_data_manager, video_name: str,  
+    def create_and_execute_step_add(self, stt_data_controller, video_name: str,  
                                   step_text: str, segment: list) -> bool:  
         """ステップ追加コマンドを作成して実行"""  
         try:  
             command = self.create_step_add_command(  
-                stt_data_manager, video_name, step_text, segment  
+                stt_data_controller, video_name, step_text, segment  
             )  
             self.execute_command(command)  
             return True  
@@ -135,12 +135,12 @@ class EditCommandFactory:
             print(f"Failed to execute step add command: {e}")  
             return False  
 
-    def create_and_execute_step_text_modify(self, stt_data_manager, video_name: str,  
+    def create_and_execute_step_text_modify(self, stt_data_controller, video_name: str,  
                                         step_index: int, old_text: str, new_text: str) -> bool:  
         """ステップテキスト変更コマンドを作成して実行"""  
         try:  
             command = self.create_step_text_modify_command(  
-                stt_data_manager, video_name, step_index, old_text, new_text  
+                stt_data_controller, video_name, step_index, old_text, new_text  
             )  
             self.execute_command(command)  
             return True  
@@ -173,12 +173,12 @@ class EditCommandFactory:
     def create_and_execute_step_modify(self, interval: DetectionInterval,  
                                     old_start: float, old_end: float,  
                                     new_start: float, new_end: float,  
-                                    stt_data_manager, video_name: str) -> bool:  
+                                    stt_data_controller, video_name: str) -> bool:  
         """ステップ変更コマンドを作成して実行"""  
         try:  
             command = self.create_step_modify_command(  
                 interval, old_start, old_end, new_start, new_end,  
-                stt_data_manager, video_name  
+                stt_data_controller, video_name  
             )  
             self.execute_command(command)  
             return True  
@@ -186,11 +186,11 @@ class EditCommandFactory:
             print(f"Failed to execute step modify command: {e}")  
             return False  
     
-    def create_and_execute_step_delete(self, stt_data_manager, video_name: str,  
+    def create_and_execute_step_delete(self, stt_data_controller, video_name: str,  
                                     step_index: int) -> bool:  
         """ステップ削除コマンドを作成して実行"""  
         try:  
-            command = self.create_step_delete_command(stt_data_manager, video_name, step_index)  
+            command = self.create_step_delete_command(stt_data_controller, video_name, step_index)  
             self.execute_command(command)  
             return True  
         except Exception as e:  

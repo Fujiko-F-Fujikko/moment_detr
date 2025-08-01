@@ -152,13 +152,13 @@ class ActionEditor(QWidget):
         self.current_query_result = query_result  
         self.clear_selection()
       
-    def set_selected_interval(self, interval: DetectionInterval, index: int):  
+    def set_selected_interval(self, interval: DetectionInterval):  
         """選択された区間を設定"""  
         if self._is_initializing:  
             return  
           
         self.selected_interval = interval  
-        self.selected_interval_index = index  
+        self.selected_interval_index = interval.query_result.relevant_windows.index(interval)  
         # デバッグ情報を追加  
 
         #show_call_stack()
