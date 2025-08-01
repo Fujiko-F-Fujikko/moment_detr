@@ -14,13 +14,15 @@ class InferenceResultsLoader:
             
         results = []  
         steps = []  
-        for i, item in enumerate(data['results']):  
-            query_result = QueryResults.from_moment_detr_json(item, i)  
-            results.append(query_result)  
-        for i, item in enumerate(data.get('steps')):  
-            query_result = QueryResults.from_moment_detr_json(item, i)  
-            query_result.is_step = True
-            steps.append(query_result)
+        if 'results' in data:
+            for i, item in enumerate(data['results']):  
+                query_result = QueryResults.from_moment_detr_json(item, i)  
+                results.append(query_result)  
+        if 'steps' in data:
+            for i, item in enumerate(data['steps']):  
+                query_result = QueryResults.from_moment_detr_json(item, i)  
+                query_result.is_step = True
+                steps.append(query_result)
 
         return InferenceResults(    
             results=results,    
