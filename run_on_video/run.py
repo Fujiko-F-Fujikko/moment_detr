@@ -1,4 +1,7 @@
 import torch
+import sys
+# moment_detrのパスを追加  
+sys.path.append('./')  
 
 from run_on_video.data_utils import ClipFeatureExtractor
 from run_on_video.model_utils import build_inference_model

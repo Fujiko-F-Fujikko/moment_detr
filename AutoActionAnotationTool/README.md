@@ -13,9 +13,9 @@ python -m venv venv
 source venv/Scripts/activate
 
 python -m pip install --upgrade pip
-pip install numpy==1.26.4
-pip install torch==2.1.2+cu118 torchvision==0.16.2+cu118 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
+pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
+※numpyは2.3.2でも動きます
 ```
 
 ## 実行手順

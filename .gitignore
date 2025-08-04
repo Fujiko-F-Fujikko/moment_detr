@@ -47,7 +47,7 @@ credentials
 ehthumbs.db
 Thumbs.db
 
-venv/
+venv*/
 *.json
 *.jsonl
 *.mp4
