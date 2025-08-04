@@ -1,0 +1,22 @@
+# test_requirements.txt
+
+# Testing framework
+pytest>=7.0.0
+pytest-qt>=4.0.0
+pytest-mock>=3.0.0
+
+# Testing utilities
+coverage>=7.0.0
+pytest-cov>=4.0.0
+
+# PyQt6 testing support
+PyQt6>=6.4.0
+
+# Additional testing utilities
+parameterized>=0.8.0
+factory_boy>=3.2.0
+
+# Code quality
+flake8>=5.0.0
+black>=22.0.0
+isort>=5.0.0
