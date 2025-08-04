@@ -1,0 +1,11 @@
+Input1
+  1. アクション認識させたい動画
+Output1
+  1. 秒数単位またはフレーム単位でのモーメント検出。自然言語による説明。
+
+
+Input2
+  1. 秒数単位またはフレーム単位でのモーメント検出結果。自然言語による説明。 
+  2. Input1-1の動画に対する物体認識結果（フレーム単位でのバウンディングボックスと物体ラベル）
+Output2
+  1. 秒数単位またはフレーム単位でのモーメント検出結果。json形式での出力("action": { "action_verb": "Hold", "manipulated_object": "Rear Cabin", "target_object": null, "tool": null } のような感じ)。
