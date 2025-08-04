@@ -433,7 +433,9 @@ class MainApplicationWindow(QMainWindow):
     def _on_data_changed(self):
         """データ変更時の処理"""
         stats = self.data_manager.get_statistics()
-        status_text = f"Actions: {stats['action_annotations']}, Steps: {stats['step_annotations']}, Total: {stats['total_annotations']}"
+        action_count = stats['by_type'].get('Action', 0)
+        step_count = stats['by_type'].get('Step', 0)
+        status_text = f"Actions: {action_count}, Steps: {step_count}, Total: {stats['total_annotations']}"
         self.statusBar().showMessage(status_text)
     
     def _on_annotation_added(self, annotation):
@@ -463,6 +465,14 @@ class MainApplicationWindow(QMainWindow):
 
 def main():
     """アプリケーションエントリーポイント"""
+    import argparse
+    
+    # コマンドライン引数の解析
+    parser = argparse.ArgumentParser(description='Video Annotation Tool')
+    parser.add_argument('--video', type=str, help='Path to video file to load')
+    parser.add_argument('--results', type=str, help='Path to inference results JSON file to load')
+    args = parser.parse_args()
+    
     app = QApplication(sys.argv)
     
     # アプリケーション情報
@@ -473,6 +483,53 @@ def main():
     # メインウィンドウ作成・表示
     window = MainApplicationWindow()
     window.show()
+    
+    # プロジェクトルートディレクトリを取得
+    # スクリプトファイルから3階層上がプロジェクトルート
+    # refactor/src/main_application_window.py -> refactor -> AutoActionAnotationTool -> moment_detr-fork
+    script_dir = Path(__file__).parent  # refactor/src/
+    project_root = script_dir.parent.parent.parent  # moment_detr-fork/
+    
+    # コマンドライン引数で指定されたファイルを読み込み
+    if args.video:
+        # 動画ファイルを読み込み
+        video_path = Path(args.video)
+        
+        # 相対パスの場合はプロジェクトルートからの相対パスとして解決
+        if not video_path.is_absolute():
+            video_path = project_root / video_path
+        
+        if video_path.exists():
+            window.logger.info(f"Loading video from command line: {video_path}")
+            window.load_video(str(video_path))
+        else:
+            window.logger.error(f"Video file not found: {video_path}")
+            # 現在のディレクトリも表示してデバッグを支援
+            window.logger.error(f"Current working directory: {Path.cwd()}")
+            window.logger.error(f"Project root directory: {project_root}")
+            QMessageBox.critical(window, "Error", f"Video file not found: {video_path}")
+    
+    if args.results:
+        # 推論結果ファイルを読み込み
+        results_path = Path(args.results)
+        
+        # 相対パスの場合はプロジェクトルートからの相対パスとして解決
+        if not results_path.is_absolute():
+            results_path = project_root / results_path
+        
+        if results_path.exists():
+            window.logger.info(f"Loading inference results from command line: {results_path}")
+            try:
+                window.io_manager.import_inference_results(str(results_path))
+            except Exception as e:
+                window.logger.error(f"Failed to load inference results: {e}")
+                QMessageBox.critical(window, "Error", f"Failed to load inference results: {e}")
+        else:
+            window.logger.error(f"Results file not found: {results_path}")
+            # 現在のディレクトリも表示してデバッグを支援
+            window.logger.error(f"Current working directory: {Path.cwd()}")
+            window.logger.error(f"Project root directory: {project_root}")
+            QMessageBox.critical(window, "Error", f"Results file not found: {results_path}")
     
     # 終了
     sys.exit(app.exec())

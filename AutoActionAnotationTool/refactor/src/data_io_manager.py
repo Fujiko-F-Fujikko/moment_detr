@@ -89,48 +89,116 @@ class DataIOManager(QObject):
         """推論結果を内部アノテーション形式に変換"""
         annotations = []
         
-        if 'data' not in data:
-            self.logger.warning("No 'data' field found in inference results")
-            return annotations
-        
-        for result in data['data']:
-            query_text = result.get('query', '')
-            video_id = result.get('vid', '')
+        # 新しい形式の場合 - results と steps フィールドを確認
+        if 'results' in data or 'steps' in data:
+            self.logger.info("Processing new inference result format")
             
-            # Step/Actionの判定
-            if query_text.startswith('Step:'):
-                annotation_type = 'step'
-                category = query_text.replace('Step: ', '').strip()
-            else:
-                annotation_type = 'action'
-                # クエリテキストからカテゴリを抽出
+            # Action アノテーションを処理 (results配列)
+            for result in data.get('results', []):
+                query_text = result.get('query', '')
+                video_id = result.get('vid', '')
+                
+                # クエリテキストからカテゴリと詳細情報を抽出
                 parts = query_text.split('_')
-                category = parts[0] if parts else query_text
+                hand_type = parts[0] if len(parts) > 0 and parts[0] != 'None' else None
+                verb = parts[1] if len(parts) > 1 and parts[1] != 'None' else None
+                object_name = parts[2] if len(parts) > 2 and parts[2] != 'None' else None
+                
+                category = f"{hand_type}_{verb}_{object_name}" if all([hand_type, verb, object_name]) else query_text
+                
+                # 関連する区間を処理
+                for idx, window in enumerate(result.get('pred_relevant_windows', [])):
+                    start_time = window[0]
+                    end_time = window[1]
+                    confidence = window[2] if len(window) > 2 else 1.0
+                    
+                    # AnnotationItemを作成
+                    annotation = AnnotationItem(
+                        id=f"Action_{len(annotations)+1:04d}",
+                        start_time=start_time,
+                        end_time=end_time,
+                        confidence_score=confidence,
+                        annotation_type='Action',
+                        category=category,
+                        video_id=video_id,
+                        hand_type=hand_type,
+                        verb=verb,
+                        object_name=object_name
+                    )
+                    
+                    annotations.append(annotation)
             
-            # 関連する区間を処理
-            for idx, window in enumerate(result.get('relevant_windows', [])):
-                start_time = window[0]
-                end_time = window[1]
-                confidence = result.get('saliency_scores', [1.0])[idx] if idx < len(result.get('saliency_scores', [])) else 1.0
+            # Step アノテーションを処理 (steps配列)
+            for step in data.get('steps', []):
+                query_text = step.get('query', '')
+                video_id = step.get('vid', '')
                 
-                # AnnotationItemを作成
-                annotation = AnnotationItem(
-                    id=f"{annotation_type}_{len(annotations)+1:04d}",
-                    start_time=start_time,
-                    end_time=end_time,
-                    confidence_score=confidence,
-                    annotation_type=annotation_type,
-                    category=category,
-                    video_id=video_id
-                )
+                # Stepの場合はクエリテキストから "Step: " を除去
+                category = query_text.replace('Step: ', '').strip() if query_text.startswith('Step:') else query_text
                 
-                # アクションの場合は追加情報を抽出
-                if annotation_type == 'action' and len(parts) >= 4:
-                    annotation.hand_type = parts[1] if parts[1] != 'None' else None
-                    annotation.object_name = parts[2] if parts[2] != 'None' else None  
-                    annotation.verb = parts[3] if parts[3] != 'None' else None
+                # 関連する区間を処理
+                for idx, window in enumerate(step.get('pred_relevant_windows', [])):
+                    start_time = window[0]
+                    end_time = window[1]
+                    confidence = window[2] if len(window) > 2 else 1.0
+                    
+                    # AnnotationItemを作成
+                    annotation = AnnotationItem(
+                        id=f"Step_{len(annotations)+1:04d}",
+                        start_time=start_time,
+                        end_time=end_time,
+                        confidence_score=confidence,
+                        annotation_type='Step',
+                        category=category,
+                        video_id=video_id
+                    )
+                    
+                    annotations.append(annotation)
+        
+        # 旧形式の場合 - dataフィールドを確認
+        elif 'data' in data:
+            self.logger.info("Processing legacy inference result format")
+            for result in data['data']:
+                query_text = result.get('query', '')
+                video_id = result.get('vid', '')
                 
-                annotations.append(annotation)
+                # Step/Actionの判定
+                if query_text.startswith('Step:'):
+                    annotation_type = 'Step'
+                    category = query_text.replace('Step: ', '').strip()
+                else:
+                    annotation_type = 'Action'
+                    # クエリテキストからカテゴリを抽出
+                    parts = query_text.split('_')
+                    category = parts[0] if parts else query_text
+                
+                # 関連する区間を処理
+                for idx, window in enumerate(result.get('relevant_windows', [])):
+                    start_time = window[0]
+                    end_time = window[1]
+                    confidence = result.get('saliency_scores', [1.0])[idx] if idx < len(result.get('saliency_scores', [])) else 1.0
+                    
+                    # AnnotationItemを作成
+                    annotation = AnnotationItem(
+                        id=f"{annotation_type}_{len(annotations)+1:04d}",
+                        start_time=start_time,
+                        end_time=end_time,
+                        confidence_score=confidence,
+                        annotation_type=annotation_type,
+                        category=category,
+                        video_id=video_id
+                    )
+                    
+                    # アクションの場合は追加情報を抽出
+                    if annotation_type == 'Action' and len(parts) >= 4:
+                        annotation.hand_type = parts[1] if parts[1] != 'None' else None
+                        annotation.object_name = parts[2] if parts[2] != 'None' else None  
+                        annotation.verb = parts[3] if parts[3] != 'None' else None
+                    
+                    annotations.append(annotation)
+        else:
+            self.logger.warning("No recognized data format found in inference results")
+            return annotations
         
         self.logger.info(f"Converted {len(annotations)} annotations from inference results")
         return annotations
