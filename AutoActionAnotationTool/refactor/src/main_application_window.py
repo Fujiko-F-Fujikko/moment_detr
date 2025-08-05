@@ -235,12 +235,26 @@ class MainApplicationWindow(QMainWindow):
         play_pause_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
         play_pause_shortcut.activated.connect(self.video_controller.toggle_playback)
         
-        # シーク
+        # フレーム単位シーク（1フレーム）
         left_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
-        left_shortcut.activated.connect(lambda: self.video_controller.seek_relative(-1.0))
+        left_shortcut.activated.connect(lambda: self.video_controller.seek_frame(-1))
         
         right_shortcut = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
-        right_shortcut.activated.connect(lambda: self.video_controller.seek_relative(1.0))
+        right_shortcut.activated.connect(lambda: self.video_controller.seek_frame(1))
+        
+        # 10フレーム単位シーク
+        shift_left_shortcut = QShortcut(QKeySequence("Shift+Left"), self)
+        shift_left_shortcut.activated.connect(lambda: self.video_controller.seek_frame(-10))
+        
+        shift_right_shortcut = QShortcut(QKeySequence("Shift+Right"), self)
+        shift_right_shortcut.activated.connect(lambda: self.video_controller.seek_frame(10))
+        
+        # 秒単位シーク
+        ctrl_left_shortcut = QShortcut(QKeySequence("Ctrl+Left"), self)
+        ctrl_left_shortcut.activated.connect(lambda: self.video_controller.seek_relative(-1.0))
+        
+        ctrl_right_shortcut = QShortcut(QKeySequence("Ctrl+Right"), self)
+        ctrl_right_shortcut.activated.connect(lambda: self.video_controller.seek_relative(1.0))
         
         # 削除
         delete_shortcut = QShortcut(QKeySequence.StandardKey.Delete, self)

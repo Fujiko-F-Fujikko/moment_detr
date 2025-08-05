@@ -167,6 +167,23 @@ class VideoController(QObject):
         
         self.seek_to_time(new_position)
     
+    def seek_frame(self, frame_count: int):
+        """フレーム単位でシーク"""
+        if not self.current_video_info:
+            self.logger.warning("No video loaded for frame seeking")
+            return
+        
+        fps = self.current_video_info.fps
+        if fps <= 0:
+            self.logger.warning("Invalid FPS for frame seeking")
+            return
+        
+        # フレーム数を秒数に変換
+        seconds_per_frame = 1.0 / fps
+        seek_seconds = frame_count * seconds_per_frame
+        
+        self.seek_relative(seek_seconds)
+    
     def get_position_seconds(self) -> float:
         """現在位置取得（秒）"""
         return self.media_player.position() / 1000.0
@@ -245,10 +262,10 @@ class VideoController(QObject):
         pass
     
     def _format_time(self, seconds: float) -> str:
-        """時間フォーマット"""
+        """時間フォーマット（小数点以下第2位まで表示）"""
         minutes = int(seconds // 60)
-        seconds = int(seconds % 60)
-        return f"{minutes:02d}:{seconds:02d}"
+        remaining_seconds = seconds % 60
+        return f"{minutes:02d}:{remaining_seconds:05.2f}"
     
     def get_current_video_info(self) -> Optional[VideoInfo]:
         """現在の動画情報取得"""
