@@ -62,7 +62,7 @@ class TimelineTrack(QWidget):
     
     def set_annotations(self, annotations: List[AnnotationItem]):
         """アノテーション設定"""
-        self.annotations = [ann for ann in annotations if ann.annotation_type == self.annotation_type]
+        self.annotations = [ann for ann in annotations if ann.annotation_type.lower() == self.annotation_type.lower()]
         self.logger.debug(f"Set {len(self.annotations)} {self.annotation_type} annotations")
         self.update()
     

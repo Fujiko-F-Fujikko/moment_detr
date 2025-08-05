@@ -208,9 +208,9 @@ class AnnotationListController(QObject):
         
         # タイプフィルタ
         if self.current_type_filter == "action":
-            annotations = [ann for ann in annotations if ann.annotation_type == 'action']
+            annotations = [ann for ann in annotations if ann.annotation_type.lower() == 'action']
         elif self.current_type_filter == "step":
-            annotations = [ann for ann in annotations if ann.annotation_type == 'step']
+            annotations = [ann for ann in annotations if ann.annotation_type.lower() == 'step']
         
         # 信頼度フィルタ
         annotations = [ann for ann in annotations 

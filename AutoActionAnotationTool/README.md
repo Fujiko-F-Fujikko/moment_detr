@@ -58,7 +58,7 @@ python AutoActionAnotationTool/src/MainApplicationWindow.py --video <path_to_vid
 python AutoActionAnotationTool/src/MainApplicationWindow.py --video stt/20250724_object-annotation/H1125062070282_2025-06-20_12-39-19_0.mp4 --results run_inference/inference_results/result_H1125062070282_2025-06-20_12-39-19_0_20250726_225936.json 
 
 # リファクタリング版（新アーキテクチャ）
-python AutoActionAnotationTool/refactor/src/main_application_window.py --video stt/20250724_object-annotation/H1125062070282_2025-06-20_12-39-19_0.mp4 --results run_inference/inference_results/result_H1125062070282_2025-06-20_12-39-19_0_20250731_155055.json 
+python AutoActionAnotationTool/refactor/src/main_application_window.py --video stt/20250724_object-annotation/H1125062070282_2025-06-20_12-39-19_0.mp4 --results run_inference/inference_results/H1125062070282_2025-06-20_12-39-19_0_20250801_223826.moment-dtr.json
 
 ```
 
