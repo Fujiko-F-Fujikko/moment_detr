@@ -431,7 +431,7 @@ class MainApplicationWindow(QMainWindow):
         if hand_type:
             kwargs['hand_type'] = hand_type
         
-        annotation = self.data_manager.add_annotation(
+        annotation = self.command_manager.execute_add_annotation(
             annotation_type, start_time, end_time, category, **kwargs
         )
     

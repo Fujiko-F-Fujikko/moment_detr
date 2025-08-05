@@ -59,6 +59,10 @@ class TimelineTrack(QWidget):
         self.temp_drag_start = None
         self.temp_drag_end = None
         
+        # 区間作成中の一時的な位置
+        self.temp_creation_start = None
+        self.temp_creation_end = None
+        
         # Hand Type別の色設定
         self.colors = {
             'action': QColor(100, 150, 255, 180),
@@ -158,6 +162,9 @@ class TimelineTrack(QWidget):
         
         # アノテーション描画
         self._draw_annotations(painter)
+        
+        # 作成中プレビュー描画
+        self._draw_creation_preview(painter)
         
         # プレイヘッド描画
         self._draw_playhead(painter)
@@ -284,6 +291,52 @@ class TimelineTrack(QWidget):
         
         painter.fillRect(bg_rect, QColor(0, 0, 0, 150))
         painter.drawText(bg_rect, Qt.AlignmentFlag.AlignCenter, label)
+    
+    def _draw_creation_preview(self, painter: QPainter):
+        """作成中プレビュー描画"""
+        if not self.creating_interval or self.temp_creation_start is None or self.temp_creation_end is None:
+            return
+        
+        start_x = self._time_to_x(self.temp_creation_start)
+        end_x = self._time_to_x(self.temp_creation_end)
+        width = end_x - start_x
+        
+        if width < 2:  # 最小幅
+            width = 2
+            end_x = start_x + width
+        
+        # プレビュー用の色（半透明で点線風）
+        if self.annotation_type.lower() == 'action' and self.hand_type:
+            base_color = self.colors.get(self.hand_type.lower(), self.colors['action'])
+        else:
+            base_color = self.colors.get(self.annotation_type.lower(), self.colors['action'])
+        
+        # 半透明の色を作成
+        preview_color = QColor(base_color)
+        preview_color.setAlpha(120)  # より透明に
+        
+        # 点線のペンを設定
+        pen = QPen(preview_color.darker(), 2)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        painter.setPen(pen)
+        
+        # 半透明のブラシを設定
+        painter.setBrush(QBrush(preview_color))
+        
+        # プレビュー矩形描画
+        rect = QRectF(start_x, 10, width, self.height() - 20)
+        painter.drawRoundedRect(rect, 3, 3)
+        
+        # プレビューテキスト描画
+        painter.setPen(QPen(QColor(255, 255, 255, 180), 1))
+        font = QFont()
+        font.setPointSize(8)
+        font.setItalic(True)  # 斜体でプレビューであることを示す
+        painter.setFont(font)
+        
+        if rect.width() > 60:  # 十分な幅がある場合のみテキストを描画
+            preview_text = "New " + self.annotation_type.capitalize()
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, preview_text)
     
     def mousePressEvent(self, event):
         """マウスプレス処理"""
@@ -461,12 +514,40 @@ class TimelineTrack(QWidget):
         """区間作成開始"""
         self.creating_interval = True
         self.creation_start_pos = pos
+        
+        # 初期位置を設定（まだドラッグしていない状態）
+        start_time = self._x_to_time(pos.x())
+        self.temp_creation_start = start_time
+        self.temp_creation_end = start_time + 0.1  # 最小長さ
+        
         self.logger.debug("Started interval creation")
     
     def _handle_interval_creation_move(self, pos: QPointF):
         """区間作成移動処理"""
-        # 作成中の区間をプレビュー表示（実装簡略化のため省略）
-        pass
+        if not self.creating_interval or not self.creation_start_pos:
+            return
+        
+        # 作成中の区間の位置を計算
+        start_time = self._x_to_time(self.creation_start_pos.x())
+        end_time = self._x_to_time(pos.x())
+        
+        # 開始と終了を正しい順序に
+        if start_time > end_time:
+            start_time, end_time = end_time, start_time
+        
+        # 最小長さを確保
+        if end_time - start_time < 0.1:
+            if pos.x() > self.creation_start_pos.x():
+                end_time = start_time + 0.1
+            else:
+                start_time = end_time - 0.1
+        
+        # 一時的な作成位置を保存
+        self.temp_creation_start = start_time
+        self.temp_creation_end = end_time
+        
+        # 画面を再描画してプレビューを表示
+        self.update()
     
     def _finish_interval_creation(self, pos: QPointF):
         """区間作成終了"""
@@ -488,6 +569,11 @@ class TimelineTrack(QWidget):
         # 作成状態リセット
         self.creating_interval = False
         self.creation_start_pos = None
+        self.temp_creation_start = None
+        self.temp_creation_end = None
+        
+        # 画面を再描画して作成プレビューをクリア
+        self.update()
         
         self.logger.debug(f"Created new {self.annotation_type} interval: {start_time:.2f}-{end_time:.2f}")
     
