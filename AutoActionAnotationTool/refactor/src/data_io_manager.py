@@ -226,7 +226,7 @@ class DataIOManager(QObject):
         }
         
         # アクションアノテーションを処理
-        action_annotations = [ann for ann in filtered_annotations if ann.annotation_type == 'action']
+        action_annotations = [ann for ann in filtered_annotations if ann.annotation_type.lower() == 'action']
         for annotation in action_annotations:
             action_data = {
                 "segment": [annotation.start_time, annotation.end_time],
@@ -236,7 +236,7 @@ class DataIOManager(QObject):
             video_data["annotation"].append(action_data)
         
         # ステップアノテーションを処理
-        step_annotations = [ann for ann in filtered_annotations if ann.annotation_type == 'step']
+        step_annotations = [ann for ann in filtered_annotations if ann.annotation_type.lower() == 'step']
         steps = []
         for annotation in step_annotations:
             step_data = {
@@ -273,7 +273,7 @@ class DataIOManager(QObject):
         query_groups = {}
         
         for annotation in self.data_manager.annotations:
-            if annotation.annotation_type == 'step':
+            if annotation.annotation_type.lower() == 'step':
                 query_text = f"Step: {annotation.category}"
             else:
                 # アクションクエリテキストを構築

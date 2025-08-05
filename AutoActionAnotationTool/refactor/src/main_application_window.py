@@ -346,7 +346,7 @@ class MainApplicationWindow(QMainWindow):
         end_time = start_time + 2.0  # デフォルト2秒
         
         # カテゴリ名
-        if annotation_type == 'action':
+        if annotation_type.lower() == 'action':
             category = "New Action"
         else:
             category = "New Step"
@@ -412,7 +412,7 @@ class MainApplicationWindow(QMainWindow):
     
     def _on_new_interval_created(self, start_time, end_time, annotation_type):
         """新規区間作成時の処理"""
-        if annotation_type == 'action':
+        if annotation_type.lower() == 'action':
             category = "New Action"
         else:
             category = "New Step"

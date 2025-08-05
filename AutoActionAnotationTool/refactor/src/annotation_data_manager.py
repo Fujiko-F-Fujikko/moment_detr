@@ -146,7 +146,7 @@ class AnnotationDataManager(QObject):
     
     def get_annotations_by_type(self, annotation_type: str) -> List[AnnotationItem]:
         """タイプ別アノテーション取得"""
-        return [ann for ann in self.annotations if ann.annotation_type == annotation_type]
+        return [ann for ann in self.annotations if ann.annotation_type.lower() == annotation_type.lower()]
     
     def get_filtered_annotations(self) -> List[AnnotationItem]:
         """フィルタリング済みアノテーション取得"""

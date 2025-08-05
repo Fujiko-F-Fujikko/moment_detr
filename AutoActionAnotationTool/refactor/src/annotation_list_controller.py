@@ -38,7 +38,7 @@ class AnnotationListItem(QListWidgetItem):
         text = f"[{start_str}-{end_str}] {category} ({confidence:.2f})"
         
         # タイプ別の表示調整
-        if self.annotation.annotation_type == 'step':
+        if self.annotation.annotation_type.lower() == 'step':
             text = f"📝 {text}"
         else:
             text = f"🎬 {text}"

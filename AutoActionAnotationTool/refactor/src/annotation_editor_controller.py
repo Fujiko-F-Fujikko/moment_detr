@@ -116,7 +116,7 @@ class ActionEditor(QWidget):
     
     def set_annotation(self, annotation: AnnotationItem):
         """アノテーション設定"""
-        if annotation.annotation_type != 'action':
+        if annotation.annotation_type.lower() != 'action':
             self.logger.warning(f"Received non-action annotation: {annotation.annotation_type}")
             return
         
