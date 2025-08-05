@@ -49,6 +49,12 @@ class TimelineTrack(QWidget):
         self.creating_interval = False
         self.creation_start_pos = None
         
+        # クリック/ドラッグ判定用
+        self.click_annotation: Optional[AnnotationItem] = None
+        self.mouse_press_pos = None
+        self.drag_threshold = 5  # ピクセル数でのドラッグ開始閾値
+        self.is_dragging = False
+        
         # Hand Type別の色設定
         self.colors = {
             'action': QColor(100, 150, 255, 180),
@@ -262,29 +268,53 @@ class TimelineTrack(QWidget):
             time_pos = self._x_to_time(event.position().x())
             annotation = self._get_annotation_at_position(event.position())
             
+            # マウス押下位置を記録
+            self.mouse_press_pos = event.position()
+            self.is_dragging = False
+            
             if annotation:
-                self._start_drag(annotation, event.position())
-                self.interval_clicked.emit(annotation)
+                # アノテーションをクリック - ドラッグ判定は移動時に行う
+                self.click_annotation = annotation
             elif event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 # Ctrl+クリックで新規区間作成開始
                 self._start_interval_creation(event.position())
             else:
                 # 空白エリアクリック
+                self.click_annotation = None
                 self.position_clicked.emit(time_pos)
     
     def mouseMoveEvent(self, event):
         """マウス移動処理"""
-        if self.dragging_annotation:
-            self._handle_drag_move(event.position())
-        elif self.creating_interval:
+        if self.creating_interval:
             self._handle_interval_creation_move(event.position())
+            return
+        
+        # クリック中のアノテーションがある場合、移動距離をチェック
+        if self.click_annotation and self.mouse_press_pos and not self.is_dragging:
+            move_distance = (event.position() - self.mouse_press_pos).manhattanLength()
+            
+            if move_distance > self.drag_threshold:
+                # 閾値を超えたのでドラッグ開始
+                self._start_drag(self.click_annotation, self.mouse_press_pos)
+                self.is_dragging = True
+        
+        if self.dragging_annotation and self.is_dragging:
+            self._handle_drag_move(event.position())
     
     def mouseReleaseEvent(self, event):
         """マウスリリース処理"""
-        if self.dragging_annotation:
+        if self.dragging_annotation and self.is_dragging:
             self._finish_drag(event.position())
         elif self.creating_interval:
             self._finish_interval_creation(event.position())
+        elif self.click_annotation and not self.is_dragging:
+            # ドラッグしなかった場合は純粋なクリック
+            self.interval_clicked.emit(self.click_annotation)
+        
+        # 状態リセット
+        self.click_annotation = None
+        self.mouse_press_pos = None
+        self.is_dragging = False
     
     def _get_annotation_at_position(self, pos: QPointF) -> Optional[AnnotationItem]:
         """位置にあるアノテーション取得"""
