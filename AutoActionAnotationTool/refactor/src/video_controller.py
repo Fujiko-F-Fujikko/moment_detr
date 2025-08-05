@@ -70,39 +70,56 @@ class VideoController(QObject):
     def _create_control_panel(self):
         """コントロールパネル作成"""
         self.control_widget = QWidget()
+        self.control_widget.setMaximumHeight(50)  # コントロールパネル全体の高さを制限
         layout = QVBoxLayout(self.control_widget)
+        layout.setContentsMargins(0, 0, 0, 0)  # 全ての余白を0に
+        layout.setSpacing(0)  # 要素間の間隔を0に
         
         # 位置スライダー
         self.position_slider = QSlider(Qt.Orientation.Horizontal)
         self.position_slider.setMinimum(0)
         self.position_slider.setMaximum(1000)
+        self.position_slider.setMaximumHeight(20)  # スライダーの高さをさらに制限
+        self.position_slider.setMinimumHeight(20)  # 最小高さも設定
         self.position_slider.valueChanged.connect(self._on_slider_changed)
         layout.addWidget(self.position_slider)
         
         # コントロールボタン
         control_layout = QHBoxLayout()
+        control_layout.setContentsMargins(0, 0, 0, 0)  # 余白なし
+        control_layout.setSpacing(2)  # ボタン間の間隔をさらに最小化
         
-        self.play_button = QPushButton("Play")
+        self.play_button = QPushButton("Play")  # 元のテキストに戻す
+        self.play_button.setMaximumHeight(20)  # 高さをさらに制限
+        self.play_button.setMinimumHeight(20)  # 最小高さも設定
         self.play_button.clicked.connect(self.toggle_playback)
         control_layout.addWidget(self.play_button)
         
         # 位置表示
-        self.position_label = QLabel("00:00")
+        self.position_label = QLabel("00:00.00")
+        self.position_label.setMaximumHeight(20)  # 高さ制限
         control_layout.addWidget(self.position_label)
         
-        control_layout.addWidget(QLabel("/"))
+        slash_label = QLabel("/")
+        slash_label.setMaximumHeight(20)  # 高さ制限
+        control_layout.addWidget(slash_label)
         
-        self.duration_label = QLabel("00:00")
+        self.duration_label = QLabel("00:00.00")
+        self.duration_label.setMaximumHeight(20)  # 高さ制限
         control_layout.addWidget(self.duration_label)
         
-        control_layout.addStretch()
+        control_layout.addStretch()  # 残りスペースを埋める
         
         # シーク制御ボタン
-        seek_back_button = QPushButton("-10s")
+        seek_back_button = QPushButton("-10s")  # 元の表記に戻す
+        seek_back_button.setMaximumHeight(20)  # 高さをさらに制限
+        seek_back_button.setMinimumHeight(20)  # 最小高さも設定
         seek_back_button.clicked.connect(lambda: self.seek_relative(-10.0))
         control_layout.addWidget(seek_back_button)
         
-        seek_forward_button = QPushButton("+10s")
+        seek_forward_button = QPushButton("+10s")  # 元の表記に戻す
+        seek_forward_button.setMaximumHeight(20)  # 高さをさらに制限
+        seek_forward_button.setMinimumHeight(20)  # 最小高さも設定
         seek_forward_button.clicked.connect(lambda: self.seek_relative(10.0))
         control_layout.addWidget(seek_forward_button)
         

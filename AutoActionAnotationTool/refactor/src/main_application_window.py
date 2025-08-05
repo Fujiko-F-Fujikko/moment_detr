@@ -96,6 +96,7 @@ class MainApplicationWindow(QMainWindow):
         """左パネル作成"""
         left_panel = QWidget()
         layout = QVBoxLayout(left_panel)
+        layout.setContentsMargins(0, 0, 0, 0)  # 左パネルの余白を完全に削除
         
         # 垂直スプリッター
         v_splitter = QSplitter(Qt.Orientation.Vertical)
@@ -103,6 +104,8 @@ class MainApplicationWindow(QMainWindow):
         # ビデオコンテナ
         video_container = QWidget()
         video_layout = QVBoxLayout(video_container)
+        video_layout.setContentsMargins(0, 0, 0, 0)  # 上下左右の余白を0に
+        video_layout.setSpacing(0)  # 要素間の間隔を0に
         video_layout.addWidget(self.video_controller.get_video_widget())
         video_layout.addWidget(self.video_controller.get_control_widget())
         
