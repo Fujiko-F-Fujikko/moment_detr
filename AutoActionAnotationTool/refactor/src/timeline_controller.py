@@ -23,11 +23,13 @@ class TimelineTrack(QWidget):
     new_interval_created = pyqtSignal(float, float, str)  # start, end, annotation_type
     position_clicked = pyqtSignal(float)  # time_position
     
-    def __init__(self, annotation_type: str, track_height: int = 60):
+    def __init__(self, annotation_type: str, hand_type: Optional[str] = None, track_height: int = 60):
         super().__init__()
         self.annotation_type = annotation_type
+        self.hand_type = hand_type  # None for step tracks, specific hand_type for action tracks
         self.track_height = track_height
-        self.logger = logging.getLogger(f"{self.__class__.__name__}_{annotation_type}")
+        track_id = f"{annotation_type}_{hand_type}" if hand_type else annotation_type
+        self.logger = logging.getLogger(f"{self.__class__.__name__}_{track_id}")
         
         # 表示設定
         self.setFixedHeight(track_height)
@@ -47,10 +49,13 @@ class TimelineTrack(QWidget):
         self.creating_interval = False
         self.creation_start_pos = None
         
-        # 色設定
+        # Hand Type別の色設定
         self.colors = {
             'action': QColor(100, 150, 255, 180),
             'step': QColor(255, 150, 100, 180),
+            'left': QColor(100, 255, 150, 180),    # 左手用の色
+            'right': QColor(255, 100, 150, 180),   # 右手用の色
+            'both': QColor(150, 100, 255, 180),    # 両手用の色
             'background': QColor(40, 40, 40),
             'grid': QColor(80, 80, 80),
             'playhead': QColor(255, 255, 0),
@@ -58,12 +63,40 @@ class TimelineTrack(QWidget):
         }
         
         self.setMouseTracking(True)
-        self.logger.info(f"TimelineTrack created for {annotation_type}")
+        self.logger.info(f"TimelineTrack created for {track_id}")
     
     def set_annotations(self, annotations: List[AnnotationItem]):
         """アノテーション設定"""
-        self.annotations = [ann for ann in annotations if ann.annotation_type.lower() == self.annotation_type.lower()]
-        self.logger.debug(f"Set {len(self.annotations)} {self.annotation_type} annotations")
+        if self.annotation_type.lower() == 'action':
+            if self.hand_type is None:
+                # Hand Typeが未指定のアクション（None または空文字列）
+                self.annotations = [ann for ann in annotations 
+                                  if ann.annotation_type.lower() == 'action' 
+                                  and (ann.hand_type is None or ann.hand_type == '' or ann.hand_type.strip() == '')]
+            else:
+                # 特定のHand Type
+                self.annotations = [ann for ann in annotations 
+                                  if ann.annotation_type.lower() == 'action' 
+                                  and ann.hand_type and ann.hand_type.lower() == self.hand_type.lower()]
+        elif self.annotation_type.lower() == 'step':
+            # ステップトラック
+            self.annotations = [ann for ann in annotations 
+                              if ann.annotation_type.lower() == 'step']
+        else:
+            # その他（フォールバック）
+            self.annotations = [ann for ann in annotations 
+                              if ann.annotation_type.lower() == self.annotation_type.lower()]
+        
+        track_id = f"{self.annotation_type}_{self.hand_type}" if self.hand_type else f"{self.annotation_type}_other"
+        self.logger.info(f"Set {len(self.annotations)} annotations for {track_id}")
+        
+        # デバッグ用：アノテーションの詳細をログ出力
+        if self.annotation_type.lower() == 'action':
+            all_action_annotations = [ann for ann in annotations if ann.annotation_type.lower() == 'action']
+            self.logger.info(f"Total action annotations: {len(all_action_annotations)}")
+            for ann in all_action_annotations[:3]:  # 最初の3つを表示
+                self.logger.info(f"  Action annotation: hand_type='{ann.hand_type}', category='{ann.category}'")
+        
         self.update()
     
     def set_video_duration(self, duration: float):
@@ -149,8 +182,11 @@ class TimelineTrack(QWidget):
             width = 2
             end_x = start_x + width
         
-        # 色選択
-        color = self.colors.get(annotation.annotation_type, self.colors['action'])
+        # 色選択（Hand Type別）
+        if annotation.annotation_type.lower() == 'action' and annotation.hand_type:
+            color = self.colors.get(annotation.hand_type.lower(), self.colors['action'])
+        else:
+            color = self.colors.get(annotation.annotation_type.lower(), self.colors['action'])
         
         # ハイライト表示
         if annotation == self.highlighted_annotation:
@@ -205,7 +241,12 @@ class TimelineTrack(QWidget):
         painter.setFont(font)
         
         # ラベルテキスト
-        label = self.annotation_type.capitalize()
+        if self.hand_type:
+            label = f"{self.annotation_type.capitalize()} ({self.hand_type.capitalize()})"
+        elif self.annotation_type.lower() == 'action':
+            label = f"{self.annotation_type.capitalize()} (Other)"
+        else:
+            label = self.annotation_type.capitalize()
         
         # 背景矩形
         fm = QFontMetrics(font)
@@ -362,7 +403,8 @@ class TimelineTrack(QWidget):
         if end_time - start_time < 0.1:  # 最小長さ
             end_time = start_time + 0.1
         
-        self.new_interval_created.emit(start_time, end_time, self.annotation_type)
+        annotation_type_with_hand = f"{self.annotation_type}_{self.hand_type}" if self.hand_type else self.annotation_type
+        self.new_interval_created.emit(start_time, end_time, annotation_type_with_hand)
         
         # 作成状態リセット
         self.creating_interval = False
@@ -414,11 +456,18 @@ class TimelineController(QObject):
         tracks_container = QWidget()
         tracks_layout = QVBoxLayout(tracks_container)
         
-        # アクショントラック
-        action_track = TimelineTrack('action')
-        self.tracks['action'] = action_track
-        self._connect_track_signals(action_track)
-        tracks_layout.addWidget(action_track)
+        # Hand Type別アクショントラック
+        hand_types = ['left', 'right', 'both', None]  # Noneは未指定のアクション用
+        for hand_type in hand_types:
+            if hand_type is None:
+                action_track = TimelineTrack('action', hand_type)
+                track_key = "action_other"
+            else:
+                action_track = TimelineTrack('action', hand_type)
+                track_key = f"action_{hand_type}"
+            self.tracks[track_key] = action_track
+            self._connect_track_signals(action_track)
+            tracks_layout.addWidget(action_track)
         
         # ステップトラック
         step_track = TimelineTrack('step')

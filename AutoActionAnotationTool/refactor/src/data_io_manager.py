@@ -100,9 +100,21 @@ class DataIOManager(QObject):
                 
                 # クエリテキストからカテゴリと詳細情報を抽出
                 parts = query_text.split('_')
-                hand_type = parts[0] if len(parts) > 0 and parts[0] != 'None' else None
+                raw_hand_type = parts[0] if len(parts) > 0 and parts[0] != 'None' else None
                 verb = parts[1] if len(parts) > 1 and parts[1] != 'None' else None
                 object_name = parts[2] if len(parts) > 2 and parts[2] != 'None' else None
+                
+                # Hand typeを正規化
+                hand_type = None
+                if raw_hand_type:
+                    if raw_hand_type.lower() == 'lefthand':
+                        hand_type = 'left'
+                    elif raw_hand_type.lower() == 'righthand':
+                        hand_type = 'right'
+                    elif raw_hand_type.lower() == 'bothhands':
+                        hand_type = 'both'
+                    else:
+                        hand_type = raw_hand_type.lower()  # その他の場合はそのまま小文字化
                 
                 category = f"{hand_type}_{verb}_{object_name}" if all([hand_type, verb, object_name]) else query_text
                 
@@ -152,48 +164,6 @@ class DataIOManager(QObject):
                         category=category,
                         video_id=video_id
                     )
-                    
-                    annotations.append(annotation)
-        
-        # 旧形式の場合 - dataフィールドを確認
-        elif 'data' in data:
-            self.logger.info("Processing legacy inference result format")
-            for result in data['data']:
-                query_text = result.get('query', '')
-                video_id = result.get('vid', '')
-                
-                # Step/Actionの判定
-                if query_text.startswith('Step:'):
-                    annotation_type = 'Step'
-                    category = query_text.replace('Step: ', '').strip()
-                else:
-                    annotation_type = 'Action'
-                    # クエリテキストからカテゴリを抽出
-                    parts = query_text.split('_')
-                    category = parts[0] if parts else query_text
-                
-                # 関連する区間を処理
-                for idx, window in enumerate(result.get('relevant_windows', [])):
-                    start_time = window[0]
-                    end_time = window[1]
-                    confidence = result.get('saliency_scores', [1.0])[idx] if idx < len(result.get('saliency_scores', [])) else 1.0
-                    
-                    # AnnotationItemを作成
-                    annotation = AnnotationItem(
-                        id=f"{annotation_type}_{len(annotations)+1:04d}",
-                        start_time=start_time,
-                        end_time=end_time,
-                        confidence_score=confidence,
-                        annotation_type=annotation_type,
-                        category=category,
-                        video_id=video_id
-                    )
-                    
-                    # アクションの場合は追加情報を抽出
-                    if annotation_type == 'Action' and len(parts) >= 4:
-                        annotation.hand_type = parts[1] if parts[1] != 'None' else None
-                        annotation.object_name = parts[2] if parts[2] != 'None' else None  
-                        annotation.verb = parts[3] if parts[3] != 'None' else None
                     
                     annotations.append(annotation)
         else:

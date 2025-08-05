@@ -410,15 +410,28 @@ class MainApplicationWindow(QMainWindow):
             annotation.id, old_values, new_values
         )
     
-    def _on_new_interval_created(self, start_time, end_time, annotation_type):
+    def _on_new_interval_created(self, start_time, end_time, annotation_type_with_hand):
         """新規区間作成時の処理"""
+        # annotation_type_with_handは "action_left", "action_right", "action_both", "step" などの形式
+        parts = annotation_type_with_hand.split('_')
+        annotation_type = parts[0]
+        hand_type = parts[1] if len(parts) > 1 and parts[1] != 'other' else None
+        
         if annotation_type.lower() == 'action':
-            category = "New Action"
+            if hand_type:
+                category = f"New {hand_type.capitalize()} Hand Action"
+            else:
+                category = "New Action"
         else:
             category = "New Step"
         
-        self.command_manager.execute_add_annotation(
-            annotation_type, start_time, end_time, category
+        # アノテーション追加時にhand_typeも含める
+        kwargs = {}
+        if hand_type:
+            kwargs['hand_type'] = hand_type
+        
+        annotation = self.data_manager.add_annotation(
+            annotation_type, start_time, end_time, category, **kwargs
         )
     
     def _on_annotation_modified(self, annotation, old_values, new_values):
