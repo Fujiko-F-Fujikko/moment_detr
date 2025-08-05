@@ -5,7 +5,7 @@
 """
 
 from PyQt6.QtCore import QObject, pyqtSignal, Qt, QPointF, QRectF
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QApplication
 from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QFontMetrics
 import logging
 from typing import List, Optional, Dict, Any, Tuple
@@ -73,6 +73,7 @@ class TimelineTrack(QWidget):
         }
         
         self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)  # キーボードフォーカスを有効化
         self.logger.info(f"TimelineTrack created for {track_id}")
     
     def set_annotations(self, annotations: List[AnnotationItem]):
@@ -311,6 +312,10 @@ class TimelineTrack(QWidget):
             self._handle_interval_creation_move(event.position())
             return
         
+        # ドラッグ中でない場合はカーソルを更新
+        if not self.is_dragging:
+            self._update_cursor(event.position())
+        
         # クリック中のアノテーションがある場合、移動距離をチェック
         if self.click_annotation and self.mouse_press_pos and not self.is_dragging:
             move_distance = (event.position() - self.mouse_press_pos).manhattanLength()
@@ -485,6 +490,57 @@ class TimelineTrack(QWidget):
         self.creation_start_pos = None
         
         self.logger.debug(f"Created new {self.annotation_type} interval: {start_time:.2f}-{end_time:.2f}")
+    
+    def _update_cursor(self, pos: QPointF):
+        """マウス位置に応じてカーソルを更新"""
+        annotation = self._get_annotation_at_position(pos)
+        
+        if annotation:
+            # アノテーション上でのカーソル判定
+            start_x = self._time_to_x(annotation.start_time)
+            end_x = self._time_to_x(annotation.end_time)
+            
+            # エッジ判定（リサイズ可能領域）
+            if abs(pos.x() - start_x) < 10:
+                # 左端 - 水平リサイズカーソル
+                self.setCursor(Qt.CursorShape.SizeHorCursor)
+            elif abs(pos.x() - end_x) < 10:
+                # 右端 - 水平リサイズカーソル
+                self.setCursor(Qt.CursorShape.SizeHorCursor)
+            else:
+                # 中央 - 移動カーソル
+                self.setCursor(Qt.CursorShape.SizeAllCursor)
+        else:
+            # 空白エリア - Ctrlキーの状態を確認
+            modifiers = QApplication.keyboardModifiers()
+            if modifiers & Qt.KeyboardModifier.ControlModifier:
+                # Ctrl押下中 - 十字カーソル（新規作成）
+                self.setCursor(Qt.CursorShape.CrossCursor)
+            else:
+                # 通常 - 矢印カーソル
+                self.setCursor(Qt.CursorShape.ArrowCursor)
+    
+    def leaveEvent(self, event):
+        """マウスがウィジェットから離れた時の処理"""
+        # カーソルをデフォルトに戻す
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        super().leaveEvent(event)
+    
+    def keyPressEvent(self, event):
+        """キー押下イベント"""
+        if event.key() == Qt.Key.Key_Control:
+            # Ctrlキーが押されたらカーソルを更新
+            pos = self.mapFromGlobal(self.cursor().pos())
+            self._update_cursor(pos)
+        super().keyPressEvent(event)
+    
+    def keyReleaseEvent(self, event):
+        """キーリリースイベント"""
+        if event.key() == Qt.Key.Key_Control:
+            # Ctrlキーが離されたらカーソルを更新
+            pos = self.mapFromGlobal(self.cursor().pos())
+            self._update_cursor(pos)
+        super().keyReleaseEvent(event)
 
 
 class TimelineController(QObject):
