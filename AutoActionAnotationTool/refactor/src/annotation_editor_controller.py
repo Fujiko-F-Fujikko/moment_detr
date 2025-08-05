@@ -316,7 +316,7 @@ class StepEditor(QWidget):
     
     def set_annotation(self, annotation: AnnotationItem):
         """アノテーション設定"""
-        if annotation.annotation_type != 'step':
+        if annotation.annotation_type.lower() != 'step':
             self.logger.warning(f"Received non-step annotation: {annotation.annotation_type}")
             return
         
@@ -440,7 +440,7 @@ class AnnotationEditorController(QObject):
         self.current_annotation = annotation
         
         # 適切なタブに切り替え
-        if annotation.annotation_type == 'step':
+        if annotation.annotation_type.lower() == 'step':
             self.tab_widget.setCurrentIndex(1)  # Step Edit
             self.step_editor.set_annotation(annotation)
             self.action_editor.clear()

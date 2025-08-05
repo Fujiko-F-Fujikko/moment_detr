@@ -102,6 +102,11 @@ class TimelineTrack(QWidget):
             self.logger.info(f"Total action annotations: {len(all_action_annotations)}")
             for ann in all_action_annotations[:3]:  # 最初の3つを表示
                 self.logger.info(f"  Action annotation: hand_type='{ann.hand_type}', category='{ann.category}'")
+        elif self.annotation_type.lower() == 'step':
+            all_step_annotations = [ann for ann in annotations if ann.annotation_type.lower() == 'step']
+            self.logger.info(f"Total step annotations: {len(all_step_annotations)}")
+            for ann in all_step_annotations[:3]:  # 最初の3つを表示
+                self.logger.info(f"  Step annotation: id='{ann.id}', category='{ann.category}', type='{ann.annotation_type}'")
         
         self.update()
     
@@ -309,6 +314,8 @@ class TimelineTrack(QWidget):
             self._finish_interval_creation(event.position())
         elif self.click_annotation and not self.is_dragging:
             # ドラッグしなかった場合は純粋なクリック
+            track_id = f"{self.annotation_type}_{self.hand_type}" if self.hand_type else self.annotation_type
+            self.logger.info(f"Emitting interval_clicked for {self.click_annotation.id} on track {track_id}")
             self.interval_clicked.emit(self.click_annotation)
         
         # 状態リセット
@@ -319,10 +326,14 @@ class TimelineTrack(QWidget):
     def _get_annotation_at_position(self, pos: QPointF) -> Optional[AnnotationItem]:
         """位置にあるアノテーション取得"""
         time_pos = self._x_to_time(pos.x())
+        track_id = f"{self.annotation_type}_{self.hand_type}" if self.hand_type else self.annotation_type
         
         for annotation in self.annotations:
             if annotation.start_time <= time_pos <= annotation.end_time:
+                self.logger.debug(f"Found annotation {annotation.id} at time {time_pos:.2f} on track {track_id}")
                 return annotation
+        
+        self.logger.debug(f"No annotation found at time {time_pos:.2f} on track {track_id} (have {len(self.annotations)} annotations)")
         return None
     
     def _start_drag(self, annotation: AnnotationItem, pos: QPointF):

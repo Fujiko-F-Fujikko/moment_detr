@@ -380,6 +380,7 @@ class MainApplicationWindow(QMainWindow):
     
     def _on_annotation_selected_from_timeline(self, annotation):
         """タイムラインからアノテーション選択"""
+        self.logger.info(f"Timeline selection: {annotation.id} (type: {annotation.annotation_type})")
         self.list_controller.select_annotation(annotation)
         self.editor_controller.set_current_annotation(annotation)
         self.timeline_controller.set_highlighted_annotation(annotation)
