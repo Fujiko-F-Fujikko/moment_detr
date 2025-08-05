@@ -55,6 +55,10 @@ class TimelineTrack(QWidget):
         self.drag_threshold = 5  # ピクセル数でのドラッグ開始閾値
         self.is_dragging = False
         
+        # ドラッグ中の一時的な位置
+        self.temp_drag_start = None
+        self.temp_drag_end = None
+        
         # Hand Type別の色設定
         self.colors = {
             'action': QColor(100, 150, 255, 180),
@@ -185,8 +189,16 @@ class TimelineTrack(QWidget):
     
     def _draw_annotation(self, painter: QPainter, annotation: AnnotationItem):
         """単一アノテーション描画"""
-        start_x = self._time_to_x(annotation.start_time)
-        end_x = self._time_to_x(annotation.end_time)
+        # ドラッグ中のアノテーションの場合は一時的な位置を使用
+        if annotation == self.dragging_annotation and self.temp_drag_start is not None and self.temp_drag_end is not None:
+            start_time = self.temp_drag_start
+            end_time = self.temp_drag_end
+        else:
+            start_time = annotation.start_time
+            end_time = annotation.end_time
+        
+        start_x = self._time_to_x(start_time)
+        end_x = self._time_to_x(end_time)
         width = end_x - start_x
         
         if width < 2:  # 最小幅
@@ -198,6 +210,11 @@ class TimelineTrack(QWidget):
             color = self.colors.get(annotation.hand_type.lower(), self.colors['action'])
         else:
             color = self.colors.get(annotation.annotation_type.lower(), self.colors['action'])
+        
+        # ドラッグ中の場合は少し透明にして区別
+        if annotation == self.dragging_annotation:
+            color = QColor(color)
+            color.setAlpha(200)  # 少し透明にする
         
         # ハイライト表示
         if annotation == self.highlighted_annotation:
@@ -341,6 +358,10 @@ class TimelineTrack(QWidget):
         self.dragging_annotation = annotation
         self.drag_start_pos = pos
         
+        # 一時的な位置を初期化
+        self.temp_drag_start = annotation.start_time
+        self.temp_drag_end = annotation.end_time
+        
         # エッジ判定
         start_x = self._time_to_x(annotation.start_time)
         end_x = self._time_to_x(annotation.end_time)
@@ -381,6 +402,13 @@ class TimelineTrack(QWidget):
                 new_end = self.video_duration
                 new_start = new_end - duration
         
+        # ドラッグ中の一時的な位置を保存
+        self.temp_drag_start = new_start
+        self.temp_drag_end = new_end
+        
+        # 画面を再描画してドラッグ中の位置を表示
+        self.update()
+        
         self.interval_drag_moved.emit(annotation, new_start, new_end)
     
     def _finish_drag(self, pos: QPointF):
@@ -416,6 +444,11 @@ class TimelineTrack(QWidget):
         self.dragging_annotation = None
         self.drag_start_pos = None
         self.drag_edge = None
+        self.temp_drag_start = None
+        self.temp_drag_end = None
+        
+        # 画面を再描画してドラッグ状態をクリア
+        self.update()
         
         self.logger.debug(f"Finished dragging {annotation.id}")
     
