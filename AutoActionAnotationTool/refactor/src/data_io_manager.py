@@ -105,7 +105,7 @@ class DataIOManager(QObject):
                 object_name = parts[2] if len(parts) > 2 and parts[2] != 'None' else None
                 
                 # Hand typeを正規化
-                hand_type = None
+                hand_type = None  # デフォルトでNoneに設定
                 if raw_hand_type:
                     if raw_hand_type.lower() == 'lefthand':
                         hand_type = 'left'
@@ -113,8 +113,9 @@ class DataIOManager(QObject):
                         hand_type = 'right'
                     elif raw_hand_type.lower() == 'bothhands':
                         hand_type = 'both'
-                    else:
-                        hand_type = raw_hand_type.lower()  # その他の場合はそのまま小文字化
+                    elif raw_hand_type.lower() in ['left', 'right', 'both']:
+                        hand_type = raw_hand_type.lower()
+                    # その他の場合（segment 1, segment 2など）はNoneのまま
                 
                 category = f"{hand_type}_{verb}_{object_name}" if all([hand_type, verb, object_name]) else query_text
                 
